@@ -1,0 +1,17 @@
+name: IdCards
+version: '0.1.0'
+main: fi.alavesa.idcards.IdCardsPlugin
+api-version: '1.21'
+author: Piia Alavesa
+description: Physical ID cards - nametags off, cards on spawn, holographic display.
+softdepend: [LuckPerms]
+commands:
+  idcard:
+    description: Manage identification cards
+    usage: |
+      /idcard give [player]     (reissue a fresh card)
+      /idcard nametags on|off
+permissions:
+  idcards.admin:
+    description: Manage ID cards
+    default: op
