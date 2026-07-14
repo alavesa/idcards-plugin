@@ -114,6 +114,12 @@ public final class CardListener implements Listener {
         CustomModelDataComponent cmd = meta.getCustomModelDataComponent();
         cmd.setStrings(List.of("lab_idcard"));
         meta.setCustomModelDataComponent(cmd);
+        // its own cooldown group: the 1.5s anti-spam sweep renders on the
+        // card exactly like a goat horn's, without touching other paper
+        var useCooldown = meta.getUseCooldown();
+        useCooldown.setCooldownSeconds(1.5f);
+        useCooldown.setCooldownGroup(new org.bukkit.NamespacedKey(plugin, "card"));
+        meta.setUseCooldown(useCooldown);
         meta.setMaxStackSize(1);
         meta.getPersistentDataContainer().set(plugin.key("card"), PersistentDataType.BYTE, (byte) 1);
         item.setItemMeta(meta);
@@ -181,6 +187,8 @@ public final class CardListener implements Listener {
         if (!isCard(event.getItem())) return;
         event.setCancelled(true);
         Player player = event.getPlayer();
+        if (player.getCooldown(event.getItem()) > 0) return; // mid-sweep, ignore
+        player.setCooldown(event.getItem(), 30);
         if (holograms.containsKey(player.getUniqueId())) {
             removeHologram(player.getUniqueId());
             return;
