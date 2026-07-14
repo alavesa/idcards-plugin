@@ -1,10 +1,10 @@
 name: IdCards
-version: '0.2.0'
+version: '0.2.1'
 main: fi.alavesa.idcards.IdCardsPlugin
 api-version: '1.21'
 author: Piia Alavesa
 description: Physical ID cards - nametags off, cards on spawn, holographic display.
-softdepend: [LuckPerms]
+softdepend: [LuckPerms, Labra]
 commands:
   idcard:
     description: Manage identification cards

@@ -162,7 +162,7 @@ public final class CardListener implements Listener {
     public void onDrop(PlayerDropItemEvent event) {
         if (isCard(event.getItemDrop().getItemStack())) {
             event.setCancelled(true);
-            event.getPlayer().sendActionBar(Component.text(
+            Msg.actionbar(event.getPlayer(), Component.text(
                 "Foundation property stays on your person.", NamedTextColor.GRAY, TextDecoration.ITALIC));
         }
     }
