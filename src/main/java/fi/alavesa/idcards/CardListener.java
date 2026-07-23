@@ -52,6 +52,7 @@ public final class CardListener implements Listener {
 
     private static final class Holo {
         final List<TextDisplay> parts = new ArrayList<>();
+        UUID owner;
         long expiresAt;
     }
 
@@ -194,11 +195,10 @@ public final class CardListener implements Listener {
             return;
         }
         Holo holo = new Holo();
+        holo.owner = player.getUniqueId();
         holo.expiresAt = System.currentTimeMillis()
             + plugin.getConfig().getInt("hologram-seconds", 3) * 1000L;
-        Location base = player.getLocation().clone()
-            .add(player.getLocation().getDirection().setY(0).normalize().multiply(0.6))
-            .add(0, 1.0, 0);
+        Location base = cardBase(player);
         Component text = Component.text()
             .append(Component.text("SCP ", NamedTextColor.DARK_GRAY, TextDecoration.BOLD))
             .append(Component.text(player.getName(), NamedTextColor.GRAY))
@@ -221,6 +221,7 @@ public final class CardListener implements Listener {
                 display.setTransformation(new Transformation(
                     new Vector3f(0, 0, 0), new AxisAngle4f(0, 0, 0, 1),
                     new Vector3f(0.5f, 0.5f, 0.5f), new AxisAngle4f(0, 0, 0, 1)));
+                display.setTeleportDuration(3);   // interpolate between follow steps -> smooth
                 display.addScoreboardTag(IdCardsPlugin.TAG_HOLO);
                 display.setPersistent(false);
             }));
@@ -229,11 +230,32 @@ public final class CardListener implements Listener {
         player.getWorld().playSound(base, Sound.ITEM_BOOK_PAGE_TURN, 0.8f, 1.4f);
     }
 
-    /** Called every 10 ticks: expired presentations fold away. */
+    /** The card floats half a block ahead of the player, at head height. */
+    private Location cardBase(Player player) {
+        return player.getLocation().clone()
+            .add(player.getLocation().getDirection().setY(0).normalize().multiply(0.6))
+            .add(0, 1.0, 0);
+    }
+
+    /** Called every tick: presented cards FOLLOW their owner around (re-anchored ahead
+     *  of them, turning with their facing), and expired presentations fold away. */
     public void tick() {
         long now = System.currentTimeMillis();
         for (UUID id : new ArrayList<>(holograms.keySet())) {
-            if (holograms.get(id).expiresAt <= now) removeHologram(id);
+            Holo holo = holograms.get(id);
+            if (holo.expiresAt <= now) { removeHologram(id); continue; }
+            Player owner = holo.owner == null ? null : plugin.getServer().getPlayer(holo.owner);
+            if (owner == null || !owner.isOnline()) { removeHologram(id); continue; }
+            Location base = cardBase(owner);
+            float yaw = owner.getLocation().getYaw();
+            for (int i = 0; i < holo.parts.size(); i++) {
+                TextDisplay part = holo.parts.get(i);
+                if (part == null || part.isDead()) continue;
+                Location at = base.clone();
+                at.setYaw(yaw + (i == 0 ? 0f : 180f));   // front face, then the back
+                at.setPitch(0);
+                part.teleport(at);
+            }
         }
     }
 

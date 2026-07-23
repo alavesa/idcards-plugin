@@ -37,7 +37,7 @@ public final class IdCardsPlugin extends JavaPlugin {
         saveConfig();
         cards = new CardListener(this);
         getServer().getPluginManager().registerEvents(cards, this);
-        getServer().getScheduler().runTaskTimer(this, cards::tick, 40L, 10L);
+        getServer().getScheduler().runTaskTimer(this, cards::tick, 40L, 1L);   // 1L: follow the owner smoothly
         if (getConfig().getBoolean("hide-nametags", true)) {
             applyNametags(true);
         }
