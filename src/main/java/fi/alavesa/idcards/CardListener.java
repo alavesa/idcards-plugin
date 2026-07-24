@@ -164,8 +164,47 @@ public final class CardListener implements Listener {
         if (isCard(event.getItemDrop().getItemStack())) {
             event.setCancelled(true);
             Msg.actionbar(event.getPlayer(), Component.text(
-                "Foundation property stays on your person.", NamedTextColor.GRAY, TextDecoration.ITALIC));
+                "Foundation property stays on your person.", NamedTextColor.GRAY));
         }
+    }
+
+    /** The card can never be put into a container (chest, barrel, ender chest, shulker,
+     *  a machine slot...): any click, shift-click, hotbar swap or drag that would move it
+     *  into the open top inventory is blocked. It lives on your person only. */
+    @EventHandler
+    public void onCardInContainer(org.bukkit.event.inventory.InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        org.bukkit.inventory.Inventory top = event.getView().getTopInventory();
+        org.bukkit.event.inventory.InventoryType t = top.getType();
+        if (t == org.bukkit.event.inventory.InventoryType.CRAFTING
+            || t == org.bukkit.event.inventory.InventoryType.PLAYER) return;   // just the player's own inv open
+        boolean blocked = false;
+        if (event.getRawSlot() < top.getSize() && isCard(event.getCursor())) blocked = true;   // place cursor card into container
+        if (event.isShiftClick() && isCard(event.getCurrentItem())
+            && event.getClickedInventory() != null && !event.getClickedInventory().equals(top)) blocked = true;   // shift into container
+        if (event.getClick() == org.bukkit.event.inventory.ClickType.NUMBER_KEY
+            && event.getRawSlot() < top.getSize()
+            && isCard(player.getInventory().getItem(event.getHotbarButton()))) blocked = true;   // hotbar swap into a container slot
+        if (blocked) {
+            event.setCancelled(true);
+            Msg.actionbar(player, Component.text("Your ID card stays on your person.", NamedTextColor.GRAY));
+        }
+    }
+
+    @EventHandler
+    public void onCardDrag(org.bukkit.event.inventory.InventoryDragEvent event) {
+        org.bukkit.inventory.Inventory top = event.getView().getTopInventory();
+        org.bukkit.event.inventory.InventoryType t = top.getType();
+        if (t == org.bukkit.event.inventory.InventoryType.CRAFTING
+            || t == org.bukkit.event.inventory.InventoryType.PLAYER) return;
+        if (!isCard(event.getOldCursor())) return;
+        for (int slot : event.getRawSlots()) if (slot < top.getSize()) { event.setCancelled(true); return; }
+    }
+
+    /** Belt-and-braces: a hopper/other mover can never suck a card into a container. */
+    @EventHandler
+    public void onCardHopper(org.bukkit.event.inventory.InventoryMoveItemEvent event) {
+        if (isCard(event.getItem())) event.setCancelled(true);
     }
 
     @EventHandler

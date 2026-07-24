@@ -6,7 +6,7 @@
 
   <groupId>fi.alavesa</groupId>
   <artifactId>idcards-plugin</artifactId>
-  <version>0.2.3</version>
+  <version>0.2.4</version>
   <packaging>jar</packaging>
 
   <name>IdCards</name>
@@ -48,5 +48,11 @@
 
   <build>
     <finalName>IdCards-${project.version}</finalName>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
   </build>
 </project>

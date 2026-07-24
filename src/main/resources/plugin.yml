@@ -1,5 +1,5 @@
 name: IdCards
-version: '0.2.2'
+version: '${project.version}'
 main: fi.alavesa.idcards.IdCardsPlugin
 api-version: '1.21'
 description: Physical ID cards - nametags off, cards on spawn, holographic display.
