@@ -98,10 +98,10 @@ installed, IdCards starts from their merged shader (read from their pack zips, p
 adds its two marked blocks; it re-merges when one of those zips changes. If a merge is impossible it ships its own
 shader and logs which plugin's HUD is affected.
 
-**Open issue with Radio:** Radio re-sends its pack when another pack loads after it, and so does IdCards, because
-each needs to be on top. IdCards' merged shader contains Radio's hooks, so IdCards on top is the correct end
-state, but until Radio is taught to leave IdCards' pack alone, a player joining a server with both gets several
-pack reloads (Radio gives up after 3). Not changed here because it is a change to the Radio plugin.
+**Radio:** use Radio 0.2.2 or newer. Radio re-sends its pack when another pack loads after it, to stay on top;
+from 0.2.2 it leaves the IdCards pack alone, because IdCards' merged shader already contains Radio's hooks. With an
+older Radio both plugins re-send in turn and a joining player gets several pack reloads. Checked on a client with
+Radio 0.2.2: two pack loads on join (Radio, then IdCards), radio popup and card drawn together.
 
 ## Commands and permissions
 
