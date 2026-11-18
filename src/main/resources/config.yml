@@ -1,0 +1,88 @@
+# IdCards. /idcard reload applies everything here; values marked (pack) rebuild the resource pack and send it again.
+
+language: en                      # plugins/IdCards/lang/<language>.yml
+
+card:
+  one-per-player: true            # true: issuing a new card makes the owner's older cards invalid (scanners deny them)
+  self-service:
+    enabled: false                # /idcard get for players with idcard.self
+    cooldown-seconds: 300
+  give-on-join: false             # hand everyone without a valid card of their own a new one when they join
+  allow-drop: true                # false: cards cannot be dropped with Q or dragged out of the inventory
+  on-death: keep                  # keep (stays in the inventory) | drop (like any item) | destroy
+  allow-containers: true          # false: cards cannot be put into chests, barrels, shulker boxes, hoppers ...
+
+ui:                               # the full-screen card (right-click)
+  scale: 0                        # (pack) 0 = the largest whole scale that fits the player's screen; else fixed, e.g. 1 or 2
+  effects: true                   # (pack) scanlines and a moving sheen on the card
+  hint:                           # (pack) the "left click to close" line, GUI pixels from the top-left corner
+    x: 6
+    y: 6
+    scale: 1
+  close-on-damage: true
+  sounds: true
+  open-cooldown-ticks: 10         # no reopening for this long after closing
+  freeze-method: auto             # auto | camera | mount. See README "How freezing works".
+
+present:                          # holding the card out (F)
+  cooldown-ticks: 20              # between two starts by the same player
+  update-interval-ticks: 10       # how often viewers in range are refreshed
+  render-distance: 32             # players further away are not told about the pose
+  max-seconds: 0                  # stop by itself after this long; 0 = never
+
+inspect:                          # the card on the HUD of somebody who looks at a presenting player
+  enabled: true
+  range: 5                        # blocks
+  interval-ticks: 4
+  scale: 1                        # (pack)
+  offset-x: 6                     # (pack) GUI pixels between the card and the right edge of the screen
+  offset-y: 0                     # (pack) GUI pixels below the middle row
+
+scanner:
+  cooldown-ticks: 20              # after a scan has finished
+  swipe-ticks: 14                 # the card sliding through the slot
+  result-ticks: 40                # how long the green or red light stays
+  present-range: 2.5              # how close a presenting player must stand for the scanner to read the card
+  volume: 1.0
+
+computer:
+  screen-timeout-seconds: 15      # back to the idle screen after this long; 0 = keep the last scan
+  time-format: "HH:mm:ss"         # java.time pattern
+  time-zone: ""                   # e.g. Europe/Helsinki; empty = the server's
+  log:
+    size: 60                      # scans kept per computer
+    page-size: 8                  # scans per dialog page (1-12)
+  auto-link:
+    enabled: false                # a newly placed scanner or computer links to every counterpart within the radius
+    radius: 8
+
+blocks:
+  break-hits: 4                   # left clicks a survival player needs to knock a scanner or computer off
+  break-window-ticks: 30          # each hit must follow the one before within this time
+  validate-interval-ticks: 100    # how often every loaded block is checked (support, barrier, entities)
+  view-range: 1.0                 # display entity view range multiplier
+
+luckperms:
+  fallback-prefix: "&7Personnel"  # shown when LuckPerms is missing or the player has no prefix; & codes, hex, MiniMessage colours
+  refresh-seconds: 60             # cached prefixes older than this are asked again (LuckPerms' change events refresh at once)
+
+pack:
+  delivery: auto                  # auto | same-port | http | url | none. See README "Hosting the pack".
+  required: true                  # the vanilla "this server requires a resource pack" prompt
+  on-decline: kick                # kick | disable (the player stays; cards and presenting tell them the pack is needed)
+  prompt: ""                      # MiniMessage text for the prompt; empty = vanilla text
+  send-delay-ticks: 60            # after joining; later than other plugins' packs, so this pack ends up on top
+  public-host: ""                 # the address players reach this server at; empty = the one each player typed
+  http:                           # delivery http
+    bind: 0.0.0.0
+    port: 8166
+  url: ""                         # delivery url: where you uploaded plugins/IdCards/idcards-pack.zip
+  sha1: ""                        # delivery url: its SHA-1; empty = the one of the zip this plugin built
+  text-shader:
+    merge: true                   # add the card HUD to another plugin's text shader instead of replacing it
+    radio-zip: Radio/radio-pack.zip                             # relative to plugins/
+    superbvehicles-zip: SuperbVehicles/pack/SuperbVehicles-hud.zip
+    cctv-zip: CCTV/cctv-pack.zip
+
+nametags:
+  hide: false                     # true: name tags above heads are hidden for everyone (team idc_hidden), identity is on the card

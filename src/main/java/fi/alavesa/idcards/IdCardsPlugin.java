@@ -1,125 +1,175 @@
 package fi.alavesa.idcards;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import fi.alavesa.idcards.block.BlockManager;
+import fi.alavesa.idcards.card.CardService;
+import fi.alavesa.idcards.card.ItemGuard;
+import fi.alavesa.idcards.command.IdCardCommand;
+import fi.alavesa.idcards.computer.ComputerService;
+import fi.alavesa.idcards.computer.ComputerType;
+import fi.alavesa.idcards.config.Lang;
+import fi.alavesa.idcards.config.Settings;
+import fi.alavesa.idcards.link.LinkService;
+import fi.alavesa.idcards.luckperms.PrefixService;
+import fi.alavesa.idcards.nms.CameraBridge;
+import fi.alavesa.idcards.presenting.PresentService;
+import fi.alavesa.idcards.profile.ProfileService;
+import fi.alavesa.idcards.resourcepack.PackService;
+import fi.alavesa.idcards.scanner.ScanService;
+import fi.alavesa.idcards.scanner.ScannerType;
+import fi.alavesa.idcards.storage.Database;
+import fi.alavesa.idcards.ui.CardRenderer;
+import fi.alavesa.idcards.ui.CardUiService;
+import fi.alavesa.idcards.ui.CardViews;
+import fi.alavesa.idcards.ui.Layout;
+import fi.alavesa.idcards.util.Keys;
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
+import java.io.File;
+import java.util.UUID;
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
-import org.bukkit.NamespacedKey;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.entity.TextDisplay;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scoreboard.Team;
 
-import java.util.List;
-import java.util.stream.Stream;
-
 /**
- * Physical identity for the facility: player nametags are hidden server-wide
- * (a scoreboard team with nametag visibility NEVER), and identity lives on a
- * card in your pocket instead - issued on join and respawn, showing the
- * holder's LuckPerms rank, presented as a static two-sided hologram on
- * right-click. Replaces the old id-cards.sk, whose NBT tagging silently
- * stopped working on 1.21 components.
+ * ID cards for RP servers: a card bound to a player, a full-screen card view, presenting, card scanners and scanner
+ * computers. This class only wires the parts together; see the package of each part.
  */
-public final class IdCardsPlugin extends JavaPlugin {
+public final class IdCardsPlugin extends JavaPlugin implements Listener {
 
-    public static final String TEAM_NAME = "idc_hidden";
-    public static final String TAG_HOLO = "idcards.holo";
+    /** The scoreboard team of IdCards 0.x that hides name tags; other plugins mirror it by this name. */
+    public static final String NAMETAG_TEAM = "idc_hidden";
 
-    private CardListener cards;
+    private Settings settings;
+    private Lang lang;
+    private Keys keys;
+    private Layout layout;
+    private Database db;
+    private ProfileService profiles;
+    private PrefixService prefixes;
+    private CardService cards;
+    private CardViews views;
+    private CardRenderer renderer;
+    private BlockManager blocks;
+    private LinkService links;
+    private ComputerService computers;
+    private ScanService scans;
+    private CardUiService ui;
+    private PresentService presenting;
+    private PackService pack;
 
     @Override
     public void onEnable() {
-        getConfig().addDefault("hologram-seconds", 3);
-        getConfig().addDefault("hide-nametags", true);
-        getConfig().options().copyDefaults(true);
-        saveConfig();
-        cards = new CardListener(this);
-        getServer().getPluginManager().registerEvents(cards, this);
-        getServer().getScheduler().runTaskTimer(this, cards::tick, 40L, 1L);   // 1L: follow the owner smoothly
-        if (getConfig().getBoolean("hide-nametags", true)) {
-            applyNametags(true);
+        saveDefaultConfig();
+        settings = new Settings(getConfig());
+        lang = new Lang(this, settings.language);
+        keys = new Keys(this);
+        try {
+            layout = new Layout(this);
+            db = new Database(getLogger());
+            db.open(new File(getDataFolder(), "idcards.db"));
+            profiles = new ProfileService(this, db);
+            prefixes = new PrefixService(this, settings.fallbackPrefix, settings.prefixRefreshSeconds);
+            cards = new CardService(this);
+        } catch (Exception e) {
+            getLogger().log(Level.SEVERE, "IdCards could not start", e);
+            Bukkit.getPluginManager().disablePlugin(this);
+            return;
         }
-        // leftover holograms from a crash or reload
-        getServer().getScheduler().runTask(this, () ->
-            Bukkit.getWorlds().forEach(world ->
-                world.getEntitiesByClass(TextDisplay.class).stream()
-                    .filter(d -> d.getScoreboardTags().contains(TAG_HOLO))
-                    .forEach(TextDisplay::remove)));
-        getLogger().info("IdCards enabled - LuckPerms "
-            + (Bukkit.getPluginManager().getPlugin("LuckPerms") != null ? "found" : "NOT found (ranks show as Personnel)"));
+        views = new CardViews(this);
+        renderer = new CardRenderer(layout, lang);
+        blocks = new BlockManager(this);
+        blocks.register(new ScannerType(this));
+        blocks.register(new ComputerType(this));
+        links = new LinkService(this);
+        computers = new ComputerService(this);
+        scans = new ScanService(this);
+        ui = new CardUiService(this, new CameraBridge(getLogger()));
+        presenting = new PresentService(this);
+        pack = new PackService(this, getFile());
+
+        var pm = Bukkit.getPluginManager();
+        for (Listener l : new Listener[]{this, profiles, new ItemGuard(this), blocks, links, computers, ui, presenting, pack}) pm.registerEvents(l, this);
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
+                event.registrar().register(new IdCardCommand(this).build(), "IdCards: cards, scanners, computers"));
+
+        // a name, skin or prefix changed: redraw whatever shows that player
+        profiles.onUpdate(this::refresh);
+        prefixes.onChange(this::refresh);
+
+        ui.sweepHelpers();
+        blocks.load();
+        links.load();
+        computers.refreshAll();
+        presenting.start();
+        pack.start();
+        applyNametags();
+        for (Player p : Bukkit.getOnlinePlayers()) pack.send(p); // loaded while the server runs
     }
 
     @Override
     public void onDisable() {
-        if (cards != null) cards.removeAllHolograms();
+        if (ui != null) ui.closeAll(CardUiService.CloseReason.PLUGIN);
+        if (presenting != null) presenting.stopAll();
+        if (blocks != null) blocks.shutdown();
+        if (pack != null) pack.stop();
+        if (prefixes != null) prefixes.close();
+        if (db != null) db.close();
     }
 
-    public void applyNametags(boolean hide) {
+    /** /idcard reload. Open card views, presenting players and placed blocks carry on with the new settings. */
+    public void reload() {
+        reloadConfig();
+        settings = new Settings(getConfig());
+        lang = new Lang(this, settings.language);
+        renderer = new CardRenderer(layout, lang);
+        prefixes.configure(settings.fallbackPrefix, settings.prefixRefreshSeconds);
+        pack.reload();
+        ui.refreshAll();
+        computers.refreshAll();
+        applyNametags();
+    }
+
+    private void refresh(UUID player) {
+        ui.refresh(player);
+        presenting.refresh(player);
+    }
+
+    /** nametags.hide: the same team IdCards 0.x used, so plugins that mirror it keep working. */
+    private void applyNametags() {
         var board = Bukkit.getScoreboardManager().getMainScoreboard();
-        Team team = board.getTeam(TEAM_NAME);
-        if (hide) {
-            if (team == null) team = board.registerNewTeam(TEAM_NAME);
-            team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
-            for (Player online : Bukkit.getOnlinePlayers()) {
-                team.addEntry(online.getName());
-            }
-        } else if (team != null) {
-            team.unregister();
-        }
+        Team team = board.getTeam(NAMETAG_TEAM);
+        if (!settings.hideNametags) return; // never unregister here: an admin may run the team by hand
+        if (team == null) team = board.registerNewTeam(NAMETAG_TEAM);
+        team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
+        for (Player online : Bukkit.getOnlinePlayers()) team.addEntry(online.getName());
     }
 
-    @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!sender.hasPermission("idcards.admin")) return error(sender, "No permission.");
-        if (args.length == 0) return usage(sender);
-        switch (args[0].toLowerCase()) {
-            case "give" -> {
-                Player target = args.length >= 2 ? Bukkit.getPlayerExact(args[1])
-                    : (sender instanceof Player p ? p : null);
-                if (target == null) return error(sender, "Player not found.");
-                cards.issue(target, true);
-                sender.sendMessage(Component.text("Fresh ID card issued to " + target.getName() + ".",
-                    NamedTextColor.AQUA));
-                return true;
-            }
-            case "nametags" -> {
-                if (args.length < 2) return usage(sender);
-                boolean hide = args[1].equalsIgnoreCase("off");
-                // "/idcard nametags off" hides them; "on" shows them again
-                applyNametags(hide);
-                getConfig().set("hide-nametags", hide);
-                saveConfig();
-                sender.sendMessage(Component.text("Nametags are now "
-                    + (hide ? "hidden - identity lives on the card." : "visible."), NamedTextColor.AQUA));
-                return true;
-            }
-            default -> { return usage(sender); }
-        }
+    @EventHandler
+    public void onJoin(PlayerJoinEvent e) {
+        if (!settings.hideNametags) return;
+        Team team = Bukkit.getScoreboardManager().getMainScoreboard().getTeam(NAMETAG_TEAM);
+        if (team != null) team.addEntry(e.getPlayer().getName());
     }
 
-    @Override
-    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        return switch (args.length) {
-            case 1 -> Stream.of("give", "nametags")
-                .filter(o -> o.startsWith(args[0].toLowerCase())).toList();
-            case 2 -> args[0].equalsIgnoreCase("nametags")
-                ? Stream.of("on", "off").filter(o -> o.startsWith(args[1].toLowerCase())).toList()
-                : List.of();
-            default -> List.of();
-        };
-    }
-
-    public NamespacedKey key(String name) { return new NamespacedKey(this, name); }
-
-    private boolean usage(CommandSender sender) {
-        sender.sendMessage(Component.text("/idcard give [player] | nametags on|off", NamedTextColor.AQUA));
-        return true;
-    }
-
-    private boolean error(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.RED));
-        return true;
-    }
+    public Settings settings() { return settings; }
+    public Lang lang() { return lang; }
+    public Keys keys() { return keys; }
+    public Layout layout() { return layout; }
+    public Database db() { return db; }
+    public ProfileService profiles() { return profiles; }
+    public PrefixService prefixes() { return prefixes; }
+    public CardService cards() { return cards; }
+    public CardViews views() { return views; }
+    public CardRenderer renderer() { return renderer; }
+    public BlockManager blocks() { return blocks; }
+    public LinkService links() { return links; }
+    public ComputerService computers() { return computers; }
+    public ScanService scans() { return scans; }
+    public CardUiService ui() { return ui; }
+    public PresentService presenting() { return presenting; }
+    public PackService pack() { return pack; }
 }

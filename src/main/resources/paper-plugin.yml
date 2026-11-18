@@ -1,0 +1,86 @@
+name: IdCards
+version: '${version}'
+main: fi.alavesa.idcards.IdCardsPlugin
+api-version: '26.3'
+description: ID cards with a full-screen card view, presenting, card scanners and scanner computers
+authors: [Piia Alavesa]
+
+# /idcard is registered with Brigadier (LifecycleEvents.COMMANDS) in command/IdCardCommand, not here.
+
+dependencies:
+  server:
+    # optional: without it, cards show luckperms.fallback-prefix from config.yml
+    LuckPerms:
+      load: BEFORE
+      required: false
+      join-classpath: true
+
+permissions:
+  idcard.admin:
+    description: Everything, including /idcard test
+    default: op
+    children:
+      idcard.use: true
+      idcard.present: true
+      idcard.self: true
+      idcard.give: true
+      idcard.close: true
+      idcard.close.others: true
+      idcard.reload: true
+      idcard.scanner.give: true
+      idcard.scanner.place: true
+      idcard.scanner.break: true
+      idcard.computer.give: true
+      idcard.computer.place: true
+      idcard.computer.break: true
+      idcard.computer.log: true
+      idcard.linktool.give: true
+      idcard.link: true
+  idcard.use:
+    description: Open a card's full-screen view (right-click) and scan cards at scanners
+    default: true
+  idcard.present:
+    description: Hold a card out with F
+    default: true
+  idcard.self:
+    description: /idcard get (also needs card.self-service.enabled)
+    default: true
+  idcard.close:
+    description: /idcard close for yourself
+    default: true
+  idcard.close.others:
+    description: /idcard close <player>
+    default: op
+  idcard.give:
+    description: /idcard give
+    default: op
+  idcard.reload:
+    description: /idcard reload
+    default: op
+  idcard.scanner.give:
+    description: /idcard scanner give
+    default: op
+  idcard.scanner.place:
+    description: Place card scanners
+    default: op
+  idcard.scanner.break:
+    description: Break card scanners
+    default: op
+  idcard.computer.give:
+    description: /idcard computer give
+    default: op
+  idcard.computer.place:
+    description: Place scanner computers
+    default: op
+  idcard.computer.break:
+    description: Break scanner computers
+    default: op
+  idcard.computer.log:
+    description: Read a scanner computer's scan log (right-click it)
+    default: op
+  idcard.linktool.give:
+    description: /idcard linktool give
+    default: op
+  idcard.link:
+    description: Link and unlink scanners and computers with the Link Tool
+    default: op

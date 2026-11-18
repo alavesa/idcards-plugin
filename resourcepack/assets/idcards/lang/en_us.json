@@ -1,0 +1,8 @@
+{
+ "subtitles.idcards.swipe": "Card swiped",
+ "subtitles.idcards.granted": "Scanner accepts",
+ "subtitles.idcards.denied": "Scanner refuses",
+ "subtitles.idcards.card_open": "ID card shown",
+ "subtitles.idcards.card_close": "ID card put away",
+ "subtitles.idcards.link": "Link tool beeps"
+}

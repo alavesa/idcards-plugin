@@ -1,6 +1,8 @@
-# build
+.gradle/
+build/
 target/
-
-# macOS
+.idea/
+*.iml
 .DS_Store
+__pycache__/
 *.zip

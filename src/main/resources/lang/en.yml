@@ -1,0 +1,94 @@
+# IdCards texts, MiniMessage. card.* lines marked (card) are printed ON the card in the card font:
+# capitals, digits and punctuation only, no tags, and they are cut at the width of their field.
+
+prefix: "<dark_gray>[<red>ID<dark_gray>]</dark_gray> <gray>"
+
+item:
+  card:
+    name: "<white>ID Card"
+    lore-owner: "<gray>Issued to <white><player>"
+    lore-use: "<dark_gray>Right-click: view · F: present"
+  scanner:
+    name: "<white>Card Scanner"
+    lore: "<gray>Place on a wall or on the floor"
+  computer:
+    name: "<white>Scanner Computer"
+    lore: "<gray>Shows the scans of linked scanners"
+  linktool:
+    name: "<aqua>Link Tool"
+    lore: "<gray>Scanner, then computer. Sneak-click: unlink"
+
+card:
+  header: "SECURE FACILITY - PERSONNEL ID"      # (card) 34 characters
+  header-short: "PERSONNEL ID"                  # (card) the hand-held card, 19 characters
+  label-name: "NAME"                            # (card)
+  label-title: "TITLE"                          # (card)
+  label-serial: "SERIAL"                        # (card)
+  footer: "PROPERTY OF SITE ADMINISTRATION"     # (card) 33 characters
+  hint-close: "LEFT CLICK TO CLOSE"             # (card) top-left corner of the screen
+  unknown-name: "UNKNOWN"                       # (card) when nobody by the card's UUID is known
+  no-permission: "You may not use ID cards."
+  unreadable: "<red>This card cannot be read."
+  pack-required: "<red>The server resource pack is needed for ID cards. Accept it and rejoin."
+  received: "You received an ID card."
+
+present:
+  no-permission: "You may not present ID cards."
+
+block:
+  no-permission-place: "<red>You may not place this."
+  no-permission-break: "<red>You may not remove this."
+  cannot-place-here: "<red>It does not fit here."
+  needs-support: "<red>It needs a solid block to sit on."
+
+scanner:
+  need-card: "Hold your ID card to scan it."
+
+computer:
+  no-permission: "<red>You may not read this terminal's log."
+  screen:
+    title: "ACCESS TERMINAL"                    # (card font)
+    idle: "AWAITING SCAN"                       # (card font)
+    no-scanner: "NO SCANNER LINKED"             # (card font)
+    granted: "GRANTED"                          # (card font)
+    denied: "DENIED"                            # (card font)
+    unreadable: "UNREADABLE CARD"               # (card font)
+  log:
+    title: "<white>Scan log"
+    header: "<gray><computer> · <scanners> scanner(s) linked · page <page>/<pages>"
+    empty: "<dark_gray>No scans yet."
+    entry-granted: "<gray><time> <green>GRANTED</green> <white><player></white> <dark_gray>at <scanner>"
+    entry-denied: "<gray><time> <red>DENIED</red> <white><player></white> <dark_gray>at <scanner> (<reason>)"
+    unreadable: "<dark_gray>unreadable card"
+    newer: "Newer"
+    older: "Older"
+    close: "Close"
+    reason:
+      valid: "refused by another plugin"
+      malformed: "damaged card"
+      forged: "forged card"
+      revoked: "replaced card"
+
+link:
+  no-permission: "<red>You may not link scanners."
+  selected: "Scanner <white><scanner></white> selected. Now right-click a computer."
+  select-first: "Right-click a scanner first."
+  linked: "<green>Linked <white><scanner></white> to <white><computer></white>."
+  already: "<white><scanner></white> is already linked to <white><computer></white>."
+  unlinked: "Removed <white><count></white> link(s) of <white><block></white>."
+  auto: "Linked automatically to <white><count></white> device(s) nearby."
+
+pack:
+  kick-declined: "<red>This server needs its resource pack for ID cards.\n<gray>Enable server resource packs for this server and join again."
+  declined: "<red>Without the resource pack, ID cards cannot be shown."
+  failed: "<red>The resource pack could not be loaded; ID cards cannot be shown. Tell an admin."
+
+command:
+  reloaded: "<green>Configuration, texts and resource pack reloaded."
+  player-needed: "<red>Name a player."
+  unknown-player: "<red>Nobody called <player> has played here. A UUID works too."
+  given-card: "Gave <white><player></white> an ID card of <white><owner></white>."
+  given-item: "Gave <white><player></white> a <item><gray>."
+  self-disabled: "<red>Cards are issued by staff here."
+  self-has-card: "You already carry your ID card."
+  self-cooldown: "You can get a new card in <white><seconds></white> s."

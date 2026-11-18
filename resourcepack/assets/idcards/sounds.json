@@ -1,0 +1,50 @@
+{
+ "swipe": {
+  "sounds": [
+   {
+    "name": "idcards:swipe"
+   }
+  ],
+  "subtitle": "subtitles.idcards.swipe"
+ },
+ "granted": {
+  "sounds": [
+   {
+    "name": "idcards:granted"
+   }
+  ],
+  "subtitle": "subtitles.idcards.granted"
+ },
+ "denied": {
+  "sounds": [
+   {
+    "name": "idcards:denied"
+   }
+  ],
+  "subtitle": "subtitles.idcards.denied"
+ },
+ "card_open": {
+  "sounds": [
+   {
+    "name": "idcards:card_open"
+   }
+  ],
+  "subtitle": "subtitles.idcards.card_open"
+ },
+ "card_close": {
+  "sounds": [
+   {
+    "name": "idcards:card_close"
+   }
+  ],
+  "subtitle": "subtitles.idcards.card_close"
+ },
+ "link": {
+  "sounds": [
+   {
+    "name": "idcards:link"
+   }
+  ],
+  "subtitle": "subtitles.idcards.link"
+ }
+}
