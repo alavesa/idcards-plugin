@@ -23,6 +23,8 @@ public final class Keys {
     public final NamespacedKey helper;
     /** Attribute modifiers of the mount-style freeze. */
     public final NamespacedKey freezeModifier;
+    /** On players who chose the plain-text card (/idcard plain). */
+    public final NamespacedKey plain;
 
     public Keys(Plugin plugin) {
         itemType = new NamespacedKey(plugin, "item");
@@ -35,6 +37,7 @@ public final class Keys {
         uiOpen = new NamespacedKey(plugin, "ui_open");
         helper = new NamespacedKey(plugin, "helper");
         freezeModifier = new NamespacedKey(plugin, "freeze");
+        plain = new NamespacedKey(plugin, "plain");
     }
 
     /** The plugin item type of a stack, or null for everything else. */

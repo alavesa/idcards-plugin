@@ -53,6 +53,11 @@ public final class IdCardCommand {
                 .then(Commands.literal("close").requires(perm("idcard.close"))
                         .executes(ctx -> close(ctx, self(ctx)))
                         .then(Commands.argument("player", ArgumentTypes.player()).requires(perm("idcard.close.others")).executes(ctx -> close(ctx, target(ctx)))))
+                .then(Commands.literal("plain").requires(perm("idcard.use")).executes(ctx -> {
+                    Player p = self(ctx);
+                    if (p != null) plugin.lang().send(p, plugin.ui().togglePlain(p) ? "command.plain-on" : "command.plain-off");
+                    return Command.SINGLE_SUCCESS;
+                }))
                 .then(Commands.literal("reload").requires(perm("idcard.reload")).executes(ctx -> {
                     plugin.reload();
                     plugin.lang().send(ctx.getSource().getSender(), "command.reloaded");
@@ -206,6 +211,33 @@ public final class IdCardCommand {
                             if (p != null && c != null) plugin.computers().openLog(p, c, 0);
                             return Command.SINGLE_SUCCESS;
                         }))))
+                // the three inputs a console cannot make: they fire the same Bukkit events a real click or key does
+                .then(Commands.literal("click").then(Commands.argument("player", ArgumentTypes.player())
+                        .then(Commands.argument("pos", ArgumentTypes.blockPosition())
+                                .then(Commands.argument("face", StringArgumentType.word()).executes(ctx -> {
+                                    Player p = target(ctx);
+                                    if (p == null) return 0;
+                                    var pos = ctx.getArgument("pos", BlockPositionResolver.class).resolve(ctx.getSource());
+                                    BlockFace face = BlockFace.valueOf(StringArgumentType.getString(ctx, "face").toUpperCase(Locale.ROOT));
+                                    var event = new org.bukkit.event.player.PlayerInteractEvent(p, org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,
+                                            p.getInventory().getItemInMainHand(), p.getWorld().getBlockAt(pos.blockX(), pos.blockY(), pos.blockZ()), face,
+                                            org.bukkit.inventory.EquipmentSlot.HAND);
+                                    Bukkit.getPluginManager().callEvent(event);
+                                    ctx.getSource().getSender().sendMessage("right-click fired");
+                                    return Command.SINGLE_SUCCESS;
+                                })))))
+                .then(Commands.literal("leftclick").then(Commands.argument("player", ArgumentTypes.player()).executes(ctx -> {
+                    Player p = target(ctx);
+                    if (p != null) Bukkit.getPluginManager().callEvent(new io.papermc.paper.event.player.PlayerArmSwingEvent(p, org.bukkit.inventory.EquipmentSlot.HAND));
+                    return Command.SINGLE_SUCCESS;
+                })))
+                .then(Commands.literal("f").then(Commands.argument("player", ArgumentTypes.player()).executes(ctx -> {
+                    Player p = target(ctx);
+                    if (p != null) {
+                        Bukkit.getPluginManager().callEvent(new org.bukkit.event.player.PlayerSwapHandItemsEvent(p, p.getInventory().getItemInOffHand(), p.getInventory().getItemInMainHand()));
+                    }
+                    return Command.SINGLE_SUCCESS;
+                })))
                 .then(Commands.literal("list").executes(ctx -> {
                     for (PlacedBlock b : plugin.blocks().all()) {
                         ctx.getSource().getSender().sendMessage("#" + b.id + " " + b.type.id() + " " + b.label() + " " + b.worldName + " " + b.x + "," + b.y + "," + b.z
@@ -227,7 +259,7 @@ public final class IdCardCommand {
                 owner = Bukkit.getOfflinePlayer(ownerName).getUniqueId();
             }
         }
-        if (!plugin.ui().open(p, owner)) ctx.getSource().getSender().sendMessage("not opened (already open, cooling down, or the pack is not loaded: " + plugin.pack().status(p) + ")");
+        if (!plugin.ui().open(p, owner)) ctx.getSource().getSender().sendMessage("not opened (already open or cooling down)");
         return Command.SINGLE_SUCCESS;
     }
 

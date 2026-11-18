@@ -44,8 +44,6 @@ public final class Settings {
     public final String packUrl, packSha1, packHttpBind, packPublicHost, packPrompt;
     public final int packHttpPort, packSendDelayTicks;
     public final boolean packRequired, packTextShader;
-    /** kick | disable */
-    public final String packOnDecline;
     public final String packRadioZip, packSuperbVehiclesZip, packCctvZip;
 
     public final boolean hideNametags;
@@ -111,8 +109,7 @@ public final class Settings {
         packPublicHost = c.getString("pack.public-host", "");
         packPrompt = c.getString("pack.prompt", "");
         packSendDelayTicks = Math.max(0, c.getInt("pack.send-delay-ticks", 60));
-        packRequired = c.getBoolean("pack.required", true);
-        packOnDecline = choice(c, "pack.on-decline", "kick", "kick", "disable");
+        packRequired = c.getBoolean("pack.required", false);
         packTextShader = c.getBoolean("pack.text-shader.merge", true);
         packRadioZip = c.getString("pack.text-shader.radio-zip", "Radio/radio-pack.zip");
         packSuperbVehiclesZip = c.getString("pack.text-shader.superbvehicles-zip", "SuperbVehicles/pack/SuperbVehicles-hud.zip");

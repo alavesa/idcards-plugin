@@ -34,7 +34,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Builds, hosts and sends the pack as an ADDITIONAL server resource pack (replace = false), so the server's own pack
- * and other plugins' packs keep working, and remembers per player whether it loaded.
+ * and other plugins' packs keep working. Whether a client loaded it is logged but never changes what the plugin does.
  *
  * <p>The pack is built at start from the sources inside the jar, plus two generated files: the config include of the shader and, when
  * another text-shader plugin is installed, the merged core/text shader ({@link TextShaderMerge}). The result is
@@ -46,7 +46,7 @@ import org.jspecify.annotations.Nullable;
  *   <li>same-port: served on the Minecraft port itself (nothing to open in a firewall; not behind a proxy)</li>
  *   <li>http: served by the built-in HTTP server on pack.http.port (that port must be reachable by players)</li>
  *   <li>url: you upload plugins/IdCards/idcards-pack.zip yourself; pack.url points at it</li>
- *   <li>none: you merged the pack into your server pack; nothing is sent and every player counts as having it</li>
+ *   <li>none: you merged the pack into your server pack; nothing is sent</li>
  * </ul>
  */
 public final class PackService implements Listener {
@@ -224,18 +224,12 @@ public final class PackService implements Listener {
             // DISCARDED is about the copy an earlier push left behind (we push again to stay on top)
             if (st == PlayerResourcePackStatusEvent.Status.DISCARDED) return;
             status.put(p.getUniqueId(), st);
-            switch (st) {
-                case DECLINED -> {
-                    if (cfg().packOnDecline.equals("kick")) p.kick(plugin.lang().get("pack.kick-declined"));
-                    else plugin.lang().send(p, "pack.declined");
-                }
-                case FAILED_DOWNLOAD, FAILED_RELOAD, INVALID_URL -> {
-                    log.warning(p.getName() + " could not load the resource pack (" + st + ") from " + uri(p)
-                            + ". If the address answers 404, another plugin is answering downloads on the Minecraft port; behind a proxy set pack.delivery: http or url.");
-                    plugin.lang().send(p, "pack.failed");
-                }
-                default -> {
-                }
+            // Nothing in the plugin depends on this answer: a server that merged the pack into its own, or a player
+            // who has it installed by hand, must work the same. The console line is for the admin only.
+            if (st == PlayerResourcePackStatusEvent.Status.FAILED_DOWNLOAD || st == PlayerResourcePackStatusEvent.Status.FAILED_RELOAD
+                    || st == PlayerResourcePackStatusEvent.Status.INVALID_URL) {
+                log.warning(p.getName() + " could not load the resource pack (" + st + ") from " + uri(p)
+                        + ". If the address answers 404, another plugin is answering downloads on the Minecraft port; behind a proxy set pack.delivery: http or url.");
             }
             return;
         }
@@ -294,12 +288,6 @@ public final class PackService implements Listener {
     }
 
     // ------------------------------------------------------------------ status
-
-    /** True when this player's client has the pack, i.e. the card HUD and the models can be shown. */
-    public boolean usable(Player p) {
-        if (cfg().packDelivery.equals("none")) return true; // merged into the server pack: the owner ships it
-        return status.get(p.getUniqueId()) == PlayerResourcePackStatusEvent.Status.SUCCESSFULLY_LOADED;
-    }
 
     public PlayerResourcePackStatusEvent.@Nullable Status status(Player p) {
         return status.get(p.getUniqueId());

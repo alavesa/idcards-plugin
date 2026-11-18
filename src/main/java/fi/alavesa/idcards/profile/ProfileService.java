@@ -3,11 +3,7 @@ package fi.alavesa.idcards.profile;
 import com.destroystokyo.paper.profile.PlayerProfile;
 import com.destroystokyo.paper.profile.ProfileProperty;
 import fi.alavesa.idcards.storage.Database;
-import java.awt.image.BufferedImage;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -15,9 +11,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.logging.Level;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import javax.imageio.ImageIO;
 import net.kyori.adventure.text.object.ObjectContents;
 import net.kyori.adventure.text.object.PlayerHeadObjectContents;
 import org.bukkit.Bukkit;
@@ -48,15 +41,10 @@ public final class ProfileService implements Listener {
     public record Profile(UUID id, @Nullable String name, @Nullable String texValue, @Nullable String texSignature) {
     }
 
-    private static final Pattern SKIN_URL = Pattern.compile("\"SKIN\"\\s*:\\s*\\{[^}]*?\"url\"\\s*:\\s*\"(https?://textures\\.minecraft\\.net/[^\"]+)\"");
-
     private final Plugin plugin;
     private final Database db;
     private final Map<UUID, Profile> cache = new ConcurrentHashMap<>();
     private final Set<UUID> loading = ConcurrentHashMap.newKeySet();
-    /** 8x8 ARGB faces (hat layer already painted over the face) by skin URL; an empty array = download failed. */
-    private final Map<String, int[]> faces = new ConcurrentHashMap<>();
-    private final Set<String> facesLoading = ConcurrentHashMap.newKeySet();
     private final List<Consumer<UUID>> listeners = new ArrayList<>();
 
     public ProfileService(Plugin plugin, Database db) {
@@ -65,7 +53,7 @@ public final class ProfileService implements Listener {
         for (Player p : Bukkit.getOnlinePlayers()) capture(p);
     }
 
-    /** Called on the main thread when a name, skin or face became known or changed. */
+    /** Called on the main thread when a name or skin became known or changed. */
     public void onUpdate(Consumer<UUID> listener) {
         listeners.add(listener);
     }
@@ -167,52 +155,5 @@ public final class ProfileService implements Listener {
             b.id(id);
         }
         return b.build();
-    }
-
-    /**
-     * The 8x8 face as ARGB (for the hand-held map picture), or null while it is not known; then the download starts
-     * and the listeners hear about it.
-     */
-    public int @Nullable [] face(UUID id) {
-        Profile p = get(id);
-        if (p.texValue() == null) return null;
-        String url = skinUrl(p.texValue());
-        if (url == null) return null;
-        int[] face = faces.get(url);
-        if (face != null) return face.length == 0 ? null : face;
-        if (facesLoading.add(url) && plugin.isEnabled()) {
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                int[] result = new int[0];
-                try {
-                    BufferedImage skin = ImageIO.read(URI.create(url).toURL());
-                    if (skin != null && skin.getWidth() == 64) {
-                        result = new int[64];
-                        for (int y = 0; y < 8; y++) {
-                            for (int x = 0; x < 8; x++) {
-                                int base = skin.getRGB(8 + x, 8 + y) | 0xFF000000, hat = skin.getRGB(40 + x, 8 + y);
-                                result[y * 8 + x] = (hat >>> 24) > 127 ? hat | 0xFF000000 : base;
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    plugin.getLogger().log(Level.FINE, "Skin download failed: " + url, e);
-                }
-                faces.put(url, result);
-                facesLoading.remove(url);
-                if (result.length > 0) notifyListeners(id);
-            });
-        }
-        return null;
-    }
-
-    /** Only textures.minecraft.net addresses are ever fetched, whatever a profile claims. */
-    private static @Nullable String skinUrl(String texturesValue) {
-        try {
-            String json = new String(Base64.getDecoder().decode(texturesValue), StandardCharsets.UTF_8);
-            Matcher m = SKIN_URL.matcher(json);
-            return m.find() ? m.group(1) : null;
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
     }
 }

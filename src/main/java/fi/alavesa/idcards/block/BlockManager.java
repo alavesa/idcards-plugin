@@ -348,8 +348,10 @@ public final class BlockManager implements Listener {
         if (e.getAction() != Action.RIGHT_CLICK_BLOCK || e.getClickedBlock() == null || e.getItem() == null) return;
         BlockType type = typeOf(e.getItem());
         if (type == null) return;
+        // read before cancelling: setCancelled(true) itself sets both results to DENY
+        boolean refused = e.useItemInHand() == org.bukkit.event.Event.Result.DENY;
         e.setCancelled(true); // the base item must never do its vanilla thing
-        if (e.useItemInHand() == org.bukkit.event.Event.Result.DENY && e.useInteractedBlock() == org.bukkit.event.Event.Result.DENY) return;
+        if (refused) return; // another plugin (a protection plugin at a lower priority) already said no
         Player p = e.getPlayer();
         if (debounce(p)) return;
         Lang lang = plugin.lang();

@@ -5,32 +5,46 @@ shader, presenting the card with F, placeable card scanners and scanner computer
 
 - Minecraft Java 26.3, Paper 26.3 (`paper-api:26.3.build.253-stable`), Java 25, Gradle (Kotlin DSL), `paper-plugin.yml`
 - LuckPerms optional (prefix on the card); without it `luckperms.fallback-prefix` is shown
-- **The resource pack is required.** There is no text-only mode.
+- The resource pack draws the card, the models and the sounds. It is offered, never required, and the plugin
+  never checks whether a client has it; players without it can switch to a text card with `/idcard plain`.
 
-Version 1.0.0 is a rewrite. IdCards 0.x (paper card + hologram) is in the git history; see "Upgrading from 0.x".
+Version 1.0 is a rewrite. IdCards 0.x (paper card + hologram) is in the git history; see "Upgrading from 0.x".
+
+## Changes in 1.0.1
+
+- **Left click no longer kicks or crashes.** In 1.0.0 the camera stood free inside the player's own hit box, so a
+  left click made the client attack itself, which vanilla servers answer with a kick. The camera now rides the
+  player (see "How freezing the player works").
+- **Scanners and computers can be placed.** 1.0.0 refused every placement by hand (it read the click's result after
+  cancelling it).
+- **The pack is not required and not detected.** Nothing is blocked for players without it. `/idcard plain` is the
+  text card for them.
+- **F no longer shows a map.** The holder sees the card held out in the middle of their view; others see both arms
+  raised with the card, as before.
 
 ## What was checked, and how
 
 Everything marked ✅ was looked at on a real 26.3 client (two offline-mode clients against a local Paper 26.3
-server, driven from the console with `/idcard test ...`, screenshots). The test clients cannot press keys or click,
-so everything that starts with a click or key is marked ☐: the code path behind it ran (through the test commands),
-the input itself did not.
+server, screenshots). The test clients cannot press keys or click. ⚙ means the Bukkit event a click or key causes
+was fired by a test command (`/idcard test click|leftclick|f`) and the result was looked at: the plugin's handling
+ran for real, the physical input did not. ☐ means not exercised at all.
 
 | | |
 |---|---|
 | ✅ | Pack loads, shader compiles on the client (stand-alone and merged with Radio + SuperbVehicles + CCTV) |
 | ✅ | Full-screen card: background, face, name, prefix, serial, barcode, hint in the corner, camera lock engaged |
-| ✅ | Presenting, first person: card held in both own arms. Third person: both arms raised, card readable |
+| ✅ | Presenting: first person card in the middle of the view; third person both arms raised, card readable |
 | ✅ | Inspect view on a second client looking at the presenter |
 | ✅ | Scanner (wall and floor) and computer models, facing, light states, swipe animation, screen texts and face |
 | ✅ | Scan granted / denied (replaced card), log dialog, blocks + links + log surviving a restart |
-| ☐ | Right-click to open, left click to close, F to present, scrolling while frozen |
-| ☐ | Placing by hand, breaking (survival hits, creative), protection plugins, pistons / explosions / water |
+| ⚙ | Placing a scanner by right-click, closing the card by left click, F to present and to stop |
+| ☐ | **A real left click while the card is open.** The kick was found and fixed by reading the client and server code (the client's target rule, the server's kick condition); it could not be reproduced or re-tested here |
+| ☐ | Right-click to open, scrolling while frozen, breaking (survival hits, creative), protection plugins, pistons / explosions / water |
 | ☐ | Link Tool clicks, log dialog page buttons, sounds (generated; nobody has listened to them) |
 | ☐ | LuckPerms prefixes and change events (not installed on the test server), real skins (offline accounts) |
-| ☐ | The seat-and-rotation fallback freeze, pack decline handling, hosting behind a proxy |
+| ☐ | The seat-and-rotation fallback freeze, `/idcard plain`, hosting behind a proxy |
 
-Go through "Manual testing checklist" at the end before using it on a live server.
+Go through "Manual testing checklist" at the end before relying on it.
 
 ## Findings for 26.3 (verified in the 26.3 client and server jars)
 
@@ -47,8 +61,11 @@ Go through "Manual testing checklist" at the end before using it on a live serve
 - Boss bar names are drawn through `GUI_TEXT`, centred; the shader ignores the vanilla position.
 - Third-person arm poses are tied to item TYPES, not components. The only idle pose with both arms raised is a
   charged crossbow (`is(CROSSBOW)` + non-empty `charged_projectiles`); `item_model` does not affect the pose.
-- First person: any item with a `map_id` component is drawn as a sheet in both of the player's own skinned arms
-  (main hand, empty off hand). Nothing else shows the player's real arms.
+- First person: a charged crossbow is drawn in the middle of the view; an item with a `map_id` component is drawn
+  as a sheet in both of the player's own skinned arms (the only thing that shows the real arms; 1.0.0 used it, the
+  team preferred no map).
+- The client aims clicks from the camera entity. It skips entities that share a vehicle with the camera, EXCEPT one
+  whose box contains the ray's start; the server kicks a client that attacks its own player.
 - A client whose camera is on another entity (set-camera packet, any game mode) ignores movement keys, sends no
   position or rotation, does not draw its own body or hotbar, but still sends clicks, F, Q, number keys and scroll.
 - An equipment packet about the player's own entity changes what their client shows in that hand.
@@ -59,9 +76,9 @@ Go through "Manual testing checklist" at the end before using it on a live serve
 
 | Problem | Chosen | Why, and what it costs |
 |---|---|---|
-| Camera lock | Set-camera packet onto an invisible item_display at the player's eyes (`nms/CameraBridge`, 3 reflective calls) | The only method with no jitter: the client itself stops moving and looking. Costs: one packet outside the API (isolated, falls back when unavailable); the hotbar disappears while the card is open; the hand item stays visible and tilts slightly with the mouse. Rejected: spectator mode (changes the player for everyone), per-tick rotation reset (shakes), attributes + seat alone (cannot stop looking). |
-| Arm animation | Per-viewer equipment packets: others see a charged crossbow with the card model, the holder sees the card with a map id | Both arms raised in third person and the holder's own skinned arms in first person, with **no change to the real item**. Costs: the third-person pose is vanilla's crossbow pose, not a custom one; the first-person card is a map (128x128 map colours, parchment rim, square); a resync of the hand slot shows the plain card until the next F. |
-| Player head | Player-head text object with cached `textures` | Real skin, crisp at any size, works offline, no server-side image work. On the hand-held map the face is painted from the downloaded skin instead (maps cannot show text objects). |
+| Camera lock | Set-camera packet onto an invisible item_display riding the player (`nms/CameraBridge`, 3 reflective calls) | The only method with no jitter: the client itself stops moving and looking. Costs: one packet outside the API (isolated, falls back when unavailable); the hotbar disappears while the card is open; the view rises 0.2 blocks; the hand item stays visible and tilts slightly with the mouse. Rejected: spectator mode (changes the player for everyone), per-tick rotation reset (shakes), attributes + seat alone (cannot stop looking). |
+| Arm animation | Equipment packets: every client in range, the holder's included, is told the hand holds a charged crossbow with the card model | Both arms raised in third person, the card in the middle of the view in first person, with **no change to the real item**. Costs: the pose is vanilla's crossbow pose, not a custom one (a server cannot play custom player animations); the holder's own arms are not drawn in first person; a resync of the hand slot shows the plain card until the next F. |
+| Player head | Player-head text object with cached `textures` | Real skin, crisp at any size, works offline, no server-side image work. |
 | HUD channel | Boss bar (name = the whole card) | The only channel other plugins cannot overwrite. Costs: the pack blanks the BLUE boss bar graphic (same as the Radio plugin); other plugins' blue bars lose their bar for pack users. |
 | Custom blocks | Database row + non-persistent item_display + Interaction + (computer) barrier | No orphans or duplicates by construction; survives restarts through the database, not through saved entities. Costs: breaking is "hit N times", not a mining bar; computers are blast- and piston-proof because barriers are. |
 
@@ -88,8 +105,10 @@ The plugin builds `plugins/IdCards/idcards-pack.zip` at every start (pack source
 | `url` | You upload `plugins/IdCards/idcards-pack.zip` somewhere; set `pack.url` (and optionally `pack.sha1`). Upload again whenever the plugin logs a new SHA-1. |
 | `none` | You merged the pack into your own; nothing is sent, every player counts as having it. |
 
-`pack.required: true` shows the vanilla "required" prompt. `pack.on-decline: kick` removes players who decline;
-`disable` lets them stay, and cards tell them the pack is needed.
+The pack is optional by default (`pack.required: false`) and the plugin never checks whether a client loaded it:
+every feature runs the same either way. A player without the pack sees rows of boxes instead of the card, paper
+instead of the items and missing-model cubes instead of the blocks; `/idcard plain` gives them the card as a line
+of ordinary text. Nothing can make the models appear without the pack.
 
 ### Sharing the text shader
 
@@ -109,12 +128,13 @@ Radio 0.2.2: two pack loads on join (Radio, then IdCards), radio popup and card 
 |---|---|
 | `/idcard give [player] [owner]` | `idcard.give` (op) |
 | `/idcard get` (needs `card.self-service.enabled`) | `idcard.self` (everyone) |
+| `/idcard plain` (text card on/off, per player) | `idcard.use` (everyone) |
 | `/idcard close [player]` | `idcard.close` (everyone), `idcard.close.others` (op) |
 | `/idcard reload` | `idcard.reload` (op) |
 | `/idcard scanner give [player]` | `idcard.scanner.give` (op) |
 | `/idcard computer give [player]` | `idcard.computer.give` (op) |
 | `/idcard linktool give [player]` | `idcard.linktool.give` (op) |
-| `/idcard test open\|present\|place\|scan\|link\|log\|list` | `idcard.admin` (op) |
+| `/idcard test open\|present\|place\|scan\|link\|log\|list\|click\|leftclick\|f` | `idcard.admin` (op) |
 
 Other permissions: `idcard.use` (view and scan, everyone), `idcard.present` (everyone), `idcard.scanner.place`,
 `idcard.scanner.break`, `idcard.computer.place`, `idcard.computer.break`, `idcard.computer.log`, `idcard.link`
@@ -138,19 +158,24 @@ Cards cannot be placed, crafted with, smelted, or put into any workstation; `car
 
 ## How freezing the player works
 
-Right-click opens the card at once. The server spawns an invisible, unsaved item_display at the player's eyes
-(visible to that player only) and two ticks later (the client must know the entity first) sends the set-camera
-packet. From then on the client ignores WASD and jump, sends no movement, and the mouse turns nothing visible.
-The server refuses everything else while the card is open: item use, block breaking and placing, inventory clicks,
-opening containers, hotbar changes, F, Q, pickups. A left click (swing, block hit or entity hit) closes it, as do
-death, quitting, teleports, world and game mode changes, damage (`ui.close-on-damage`), plugin disable and
-`/idcard close`. On close the camera is given back and the player is teleported to where they stood, because their
-client kept simulating its hidden body.
+Right-click opens the card at once. The server spawns an invisible, unsaved item_display (visible to that player
+only) riding the player on a 0.02 block spacer, and two ticks later (the client must know the entity first) sends
+the set-camera packet. From then on the client ignores WASD and jump, sends no movement, and the mouse turns
+nothing visible. The server refuses everything else while the card is open: item use, block breaking and placing,
+inventory clicks, opening containers, hotbar changes, F, Q, pickups. A left click (swing, block hit or entity hit)
+closes it, as do death, quitting, teleports, world and game mode changes, damage (`ui.close-on-damage`), plugin
+disable and `/idcard close`. On close the camera is given back and the player is teleported to where they stood,
+because their client kept simulating its hidden body.
+
+Why the camera rides the player: clicks are aimed from the camera, and a camera standing free at the player's eyes
+is inside the player's own hit box, so a left click attacks the player itself and the server kicks for it. The
+client never aims at something that shares a vehicle with the camera, unless the ray starts inside its box; riding
+the player on a spacer satisfies both.
 
 Failure modes:
 - During the first 2 ticks only position changes are cancelled; a fast mouse flick in that moment turns the view.
-- Opened in mid-air, the player is also seated on the anchor (vanilla kicks hovering clients that send no movement).
-- If the anchor is removed (`/kill @e`), the card closes on the next tick.
+- Opened in mid-air, the player is also seated on a second invisible entity (vanilla kicks hovering clients that send no movement).
+- If a helper entity is removed (`/kill @e`), the card closes on the next tick.
 - If the packet class cannot be found (`ui.freeze-method: mount`, or other server software), the fallback seats the
   player on the anchor and resets their rotation every tick: it holds, but the view shakes when the mouse moves.
 - After a crash nothing needs undoing on the client (camera and anchor do not survive a relog); a marker in the
@@ -162,17 +187,17 @@ F with a card in the main hand: the swap is cancelled and the card is held out. 
 dropping, opening or clicking an inventory, death, quit, teleport, world or game mode change, or the card leaving
 the hand stops it. `present.cooldown-ticks` rate-limits starts.
 
-- Players within `present.render-distance` are told (equipment packet) that the presenter holds a charged crossbow
-  with the card model: vanilla raises both arms. Refreshed every `present.update-interval-ticks`.
-- The presenter's own client is told its hand holds the card with a map id: first person shows both own arms
-  holding the card as a map. Map ids are pooled in `maps.yml`.
+- Players within `present.render-distance`, and the presenter's own client, are told (equipment packet) that the
+  presenter holds a charged crossbow with the card model: vanilla raises both arms in third person and puts the
+  card in the middle of the view in first person. Refreshed every `present.update-interval-ticks`.
 - A player within `inspect.range` blocks whose crosshair is on the presenter (box ray test, then a block ray test
   for walls) gets the card on the right side of their HUD until they look away. They are not frozen.
-- The real item is never touched. The stand-in items are tagged and are refused and deleted wherever a creative
+- The real item is never touched. The stand-in item is tagged and is refused and deleted wherever a creative
   client could make them real.
 
-Cannot be done by a plugin: a custom arm animation, the holder's real skin on a custom 3D arm model, or a
-first-person view that others' clients share.
+Cannot be done by a plugin: a custom arm animation (one arm reaching out, for example). Vanilla clients only have
+the poses their items trigger, and the charged crossbow's is the only idle one with raised arms. A mod or a
+custom player model would be needed for anything else.
 
 ## How the placeable blocks work
 
@@ -250,7 +275,8 @@ server pack build reads it; 1.0 does not use it.
 Card
 - [ ] `/idcard give` yourself a card; rename it on an anvil; it still opens and scans as yours
 - [ ] Right-click (air, block, either hand): card opens at once, no chat message
-- [ ] While open: WASD, jump, mouse, scroll, number keys, F, Q, E do nothing; left click closes
+- [ ] While open: WASD, jump, mouse, scroll, number keys, F, Q, E do nothing
+- [ ] **Left click closes it, looking in every direction (straight down too), without a kick or crash**
 - [ ] Closes on damage, death, `/tp`, `/gamemode`, `/idcard close`, `/idcard reload` (stays open), plugin disable
 - [ ] Open it while jumping; open it, then kill the server process, rejoin: you can move
 - [ ] Card of an offline player (`/idcard give you <name>`): name and face correct
@@ -260,7 +286,7 @@ Card
 
 Presenting
 - [ ] F holds the card out; F again puts it away; so do scrolling, dropping, opening the inventory
-- [ ] Look down: both of your arms hold the card. Another player sees both arms raised and the card
+- [ ] You see the card held in the middle of your view. Another player sees both arms raised and the card
 - [ ] Another player within 5 blocks looking at you gets the card on their HUD; it goes when they look away
 - [ ] Creative: while presenting, open the inventory and click the card: no stand-in item appears
 
@@ -276,5 +302,5 @@ Blocks
 - [ ] Computer log: entries, page buttons, permission
 
 Pack
-- [ ] Decline the pack: kicked (or stays, with `on-decline: disable`)
+- [ ] Decline the pack: nothing is blocked; `/idcard plain` shows the text card
 - [ ] Vanilla chat, signs, name tags, maps and other plugins' HUDs look as before

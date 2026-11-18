@@ -5,7 +5,6 @@ import fi.alavesa.idcards.api.CardPresentEvent;
 import fi.alavesa.idcards.card.CardData;
 import io.papermc.paper.datacomponent.DataComponentTypes;
 import io.papermc.paper.datacomponent.item.ChargedProjectiles;
-import io.papermc.paper.datacomponent.item.MapId;
 import io.papermc.paper.event.player.PlayerInventorySlotChangeEvent;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,27 +31,24 @@ import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.map.MapView;
 import org.bukkit.persistence.PersistentDataType;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Presenting: F while holding a card in the main hand holds it out; F again, or anything that takes the card out of
  * the hand, puts it away.
  *
  * <p><b>How the pose is made.</b> A server cannot play player animations, but vanilla poses a player by what is in
- * their hand, and a server may tell each client something different about that hand:
- * <ul>
- *   <li>EVERYONE ELSE is told the presenter holds a charged crossbow whose item model is the card. A charged
- *       crossbow is the one item whose idle pose raises both arms, so in third person both arms come up and the
- *       card (a 3D model, placed by its display transform) stands between the hands, facing forward.</li>
- *   <li>THE PRESENTER is told their hand holds an item with a map id. Vanilla draws such an item in first person
- *       as a sheet held in both of the player's own skinned arms; the map picture is the card ({@link CardMaps}).</li>
- * </ul>
- * Both are sent with {@code Player.sendEquipmentChange}: packets only. <b>The real item never changes</b>, so there
+ * their hand, and a server may tell clients something else about that hand than what the inventory holds. While
+ * presenting, every client in range (the presenter's own included) is told the hand holds a charged crossbow whose
+ * item model is the card. A charged crossbow is the one item whose idle pose raises both arms, so in third person
+ * the arms come up and the card (a 3D model, placed by its display transform) is held out in front of the chest;
+ * in first person vanilla moves a charged crossbow to the middle of the view, so the holder sees the card held out
+ * in front of them.
+ *
+ * <p>It is sent with {@code Player.sendEquipmentChange}: packets only. <b>The real item never changes</b>, so there
  * is nothing to swap back, lose or duplicate, and nothing to restore after a crash: the server's inventory holds the
- * card the whole time, and any inventory resync shows it again. The stand-ins carry a tag ({@code fake}) and are
- * refused and deleted wherever they could turn real (ItemGuard), which only a creative-mode client could try.
+ * card the whole time, and any inventory resync shows it again. The stand-in carries a tag ({@code fake}) and is
+ * refused and deleted wherever it could turn real (ItemGuard), which only a creative-mode client could try.
  *
  * <p>Presenters and their viewers are refreshed every {@code present.update-interval-ticks}: new players in range
  * get the stand-in, players who left range get the real item back. Main thread only.
@@ -63,15 +59,12 @@ public final class PresentService implements Listener {
         UUID owner;
         boolean valid;
         int slot, startedTick;
-        @Nullable MapView map;
         final Set<UUID> viewers = new HashSet<>();
-        boolean offHandHidden;
     }
 
     private static final Key PRESENTING_MODEL = Key.key("idcards", "id_card_presenting");
 
     private final IdCardsPlugin plugin;
-    private final CardMaps maps;
     private final InspectService inspect;
     private final Map<UUID, State> presenting = new HashMap<>();
     private final Map<UUID, Integer> lastStart = new HashMap<>();
@@ -79,7 +72,6 @@ public final class PresentService implements Listener {
 
     public PresentService(IdCardsPlugin plugin) {
         this.plugin = plugin;
-        this.maps = new CardMaps(plugin);
         this.inspect = new InspectService(plugin);
         othersItem = ItemStack.of(Material.CROSSBOW);
         othersItem.setData(DataComponentTypes.ITEM_MODEL, PRESENTING_MODEL);
@@ -126,10 +118,6 @@ public final class PresentService implements Listener {
             plugin.lang().send(p, "present.no-permission");
             return false;
         }
-        if (!plugin.pack().usable(p)) {
-            plugin.lang().send(p, "card.pack-required");
-            return false;
-        }
         CardData data = plugin.cards().read(card);
         if (data.owner() == null) {
             plugin.lang().send(p, "card.unreadable");
@@ -148,25 +136,10 @@ public final class PresentService implements Listener {
         s.valid = data.valid();
         s.slot = p.getInventory().getHeldItemSlot();
         s.startedTick = now;
-        s.map = maps.acquire(plugin.views().of(s.owner));
         presenting.put(p.getUniqueId(), s);
-        showSelf(p, s);
+        p.sendEquipmentChange(p, EquipmentSlot.HAND, othersItem); // the holder's own first-person view
         updateViewers(p, s);
         return true;
-    }
-
-    /** What the presenter's own client is shown: the card with a map id, and an empty off hand (both arms are needed). */
-    private void showSelf(Player p, State s) {
-        if (s.map == null) return; // no map: the holder keeps seeing the plain card item
-        p.sendMap(s.map);
-        ItemStack self = p.getInventory().getItemInMainHand().clone();
-        self.setData(DataComponentTypes.MAP_ID, MapId.mapId(s.map.getId()));
-        self.editPersistentDataContainer(pdc -> pdc.set(plugin.keys().fake, PersistentDataType.BYTE, (byte) 1));
-        p.sendEquipmentChange(p, EquipmentSlot.HAND, self);
-        if (!p.getInventory().getItemInOffHand().isEmpty()) {
-            p.sendEquipmentChange(p, EquipmentSlot.OFF_HAND, ItemStack.empty());
-            s.offHandHidden = true;
-        }
     }
 
     public void stop(Player p) {
@@ -177,7 +150,6 @@ public final class PresentService implements Listener {
             Player v = Bukkit.getPlayer(id);
             if (v != null && v.isOnline() && p.isOnline()) v.sendEquipmentChange(p, EquipmentSlot.HAND, real);
         }
-        if (s.map != null) maps.release(s.map);
         if (p.isOnline()) p.updateInventory(); // the real card and off hand again
         inspect.update(owners());
     }
@@ -229,15 +201,8 @@ public final class PresentService implements Listener {
         s.viewers.addAll(inRange);
     }
 
-    /** A name, skin or prefix changed: repaint the maps and HUDs that show this owner. */
+    /** A name, skin or prefix changed: redraw the HUDs that show this owner. */
     public void refresh(UUID owner) {
-        for (Map.Entry<UUID, State> e : presenting.entrySet()) {
-            State s = e.getValue();
-            Player p = Bukkit.getPlayer(e.getKey());
-            if (!s.owner.equals(owner) || s.map == null || p == null) continue;
-            maps.paint(s.map, plugin.views().of(owner));
-            p.sendMap(s.map);
-        }
         inspect.refresh(owner);
     }
 

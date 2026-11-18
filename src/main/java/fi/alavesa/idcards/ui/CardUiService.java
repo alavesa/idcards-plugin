@@ -14,6 +14,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Interaction;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -43,6 +44,7 @@ import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The full-screen card: opening, closing, and holding the player still while it is open.
@@ -53,13 +55,23 @@ import org.bukkit.persistence.PersistentDataType;
  * name, so other plugins' bars above or below do not move the card. (The pack blanks the blue bar graphic.)
  *
  * <p><b>Freezing: the camera packet.</b> While the card is open the client's camera is put on an invisible
- * item_display standing exactly at the player's eyes (see {@link CameraBridge} for why this needs one packet outside
- * the API). The client then ignores movement keys and sends no movement at all, and the mouse turns nothing visible:
- * no jitter, because nothing is corrected after the fact. Clicks, the F key, number keys and the mouse wheel still
- * reach the server, which is how the left click closes the card and how everything else is refused here.
- * A player who opens the card in mid-air is also seated on the anchor, because vanilla kicks clients that hover
- * without sending movement. When the packet cannot be sent (other server software, changed internals) the fallback
- * is the seat plus setting the rotation back every tick, which holds but shakes when the mouse moves.
+ * item_display that RIDES the player (see {@link CameraBridge} for why this needs one packet outside the API). The
+ * client then ignores movement keys and sends no movement at all, and the mouse turns nothing visible: no jitter,
+ * because nothing is corrected after the fact. Clicks, the F key, number keys and the mouse wheel still reach the
+ * server, which is how the left click closes the card and how everything else is refused here.
+ *
+ * <p>The riding matters. A click is aimed from the camera entity, and the camera sits inside the player's own hit
+ * box: a free-standing camera makes the client attack ITSELF on a left click, which vanilla servers answer with a
+ * kick ("invalid entity attacked"). The client never targets an entity that shares a vehicle with the camera, and
+ * a passenger shares its vehicle's: so the camera is a passenger of the player. One exception remains in the
+ * client: an entity whose box CONTAINS the ray's start is always a target. So the camera must also be outside the
+ * player's box, not merely on its top face: a 0.02 block high spacer (an Interaction entity) rides the player and
+ * the camera rides the spacer. The camera ends up 0.2 blocks above the eyes.
+ *
+ * <p>A player who opens the card in mid-air is also seated on a second invisible entity, because vanilla kicks
+ * clients that hover without sending movement. When the packet cannot be sent (other server software, changed
+ * internals) the fallback is that seat plus setting the rotation back every tick, which holds but shakes when the
+ * mouse moves.
  *
  * <p>Nothing about the freeze is stored in the player's saved data except one marker ({@code ui_open}); the anchor
  * is not saved either. After a crash the client simply has its own camera again on the next login, and the marker
@@ -72,11 +84,14 @@ public final class CardUiService implements Listener {
     private static final class Session {
         UUID owner;
         BossBar bar;
-        ItemDisplay anchor;
+        @Nullable ItemDisplay anchor, seat;
+        @Nullable Interaction spacer;
         Location origin;
         boolean cameraLocked, seated, teleporting;
         int openedTick;
     }
+
+    private static final float SPACER_HEIGHT = 0.02f;
 
     private final IdCardsPlugin plugin;
     private final CameraBridge camera;
@@ -103,10 +118,6 @@ public final class CardUiService implements Listener {
     /** Opens the card of {@code owner} for {@code p}. Returns false when it did not open. */
     public boolean open(Player p, UUID owner) {
         if (isOpen(p) || p.isDead() || !p.isOnline()) return false;
-        if (!plugin.pack().usable(p)) {
-            plugin.lang().send(p, "card.pack-required");
-            return false;
-        }
         Integer closed = lastClosed.get(p.getUniqueId());
         if (closed != null && Bukkit.getCurrentTick() - closed < plugin.settings().uiOpenCooldownTicks) return false;
         plugin.presenting().stop(p);
@@ -116,25 +127,32 @@ public final class CardUiService implements Listener {
         s.owner = owner;
         s.origin = p.getLocation();
         s.openedTick = Bukkit.getCurrentTick();
-        Location eye = p.getEyeLocation();
-        s.anchor = p.getWorld().spawn(eye, ItemDisplay.class, d -> {
-            d.setPersistent(false);
-            d.setVisibleByDefault(false);
-            d.getPersistentDataContainer().set(plugin.keys().helper, PersistentDataType.BYTE, (byte) 1);
-        });
-        p.showEntity(plugin, s.anchor);
         boolean airborne = !((Entity) p).isOnGround() && !p.isFlying();
         if (!useCamera() || airborne) {
-            // the seat sits at the feet; a passenger cannot walk, and vanilla does not kick a hovering passenger
+            // a passenger cannot walk, and vanilla does not kick a hovering passenger
             p.leaveVehicle();
-            s.anchor.teleport(p.getLocation());
-            s.seated = s.anchor.addPassenger(p);
+            s.seat = helper(p, p.getLocation());
+            s.seated = s.seat.addPassenger(p);
         }
-        s.bar = BossBar.bossBar(render(owner), 0f, BossBar.Color.BLUE, BossBar.Overlay.PROGRESS);
+        if (useCamera()) {
+            // player <- spacer <- camera; see the class comment: this is what makes a left click safe
+            s.spacer = p.getWorld().spawn(p.getEyeLocation(), Interaction.class, e -> {
+                e.setPersistent(false);
+                e.setVisibleByDefault(false);
+                e.setInteractionWidth(0.02f);
+                e.setInteractionHeight(SPACER_HEIGHT);
+                e.getPersistentDataContainer().set(plugin.keys().helper, PersistentDataType.BYTE, (byte) 1);
+            });
+            p.showEntity(plugin, s.spacer);
+            s.anchor = helper(p, p.getEyeLocation());
+            p.addPassenger(s.spacer);
+            s.spacer.addPassenger(s.anchor);
+        }
+        s.bar = BossBar.bossBar(render(owner, p), 0f, BossBar.Color.BLUE, BossBar.Overlay.PROGRESS);
         p.showBossBar(s.bar);
         p.getPersistentDataContainer().set(plugin.keys().uiOpen, PersistentDataType.BYTE, (byte) 1);
         sessions.put(p.getUniqueId(), s);
-        if (useCamera() && !s.seated) {
+        if (s.anchor != null) {
             // the client must have received the anchor before it can look through it: entities reach clients at
             // the end of the tick they were spawned in
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -152,8 +170,15 @@ public final class CardUiService implements Listener {
         p.hideBossBar(s.bar);
         p.getPersistentDataContainer().remove(plugin.keys().uiOpen);
         if (s.cameraLocked) camera.setCamera(p, p);
-        if (s.seated) s.anchor.removePassenger(p);
-        s.anchor.remove();
+        if (s.anchor != null) s.anchor.remove();
+        if (s.spacer != null) {
+            p.removePassenger(s.spacer);
+            s.spacer.remove();
+        }
+        if (s.seat != null) {
+            s.seat.removePassenger(p);
+            s.seat.remove();
+        }
         boolean online = reason != CloseReason.QUIT && p.isOnline();
         // The client kept simulating its own (hidden) player while the camera was away: put it back where the
         // server has it, looking where it looked. Not when the close itself is a teleport, a death or a world change.
@@ -180,19 +205,36 @@ public final class CardUiService implements Listener {
         }
     }
 
-    private Component render(UUID owner) {
-        return plugin.renderer().render(plugin.views().of(owner), false);
+    private Component render(UUID owner, Player viewer) {
+        return plugin.renderer().render(plugin.views().of(owner), false, plain(viewer));
+    }
+
+    /** True for players who chose the one-line text card (/idcard plain). */
+    public boolean plain(Player p) {
+        return p.getPersistentDataContainer().has(plugin.keys().plain);
+    }
+
+    /** Switches between the drawn card and the text card; returns the new state. */
+    public boolean togglePlain(Player p) {
+        boolean now = !plain(p);
+        if (now) p.getPersistentDataContainer().set(plugin.keys().plain, PersistentDataType.BYTE, (byte) 1);
+        else p.getPersistentDataContainer().remove(plugin.keys().plain);
+        return now;
     }
 
     /** A name, skin or prefix changed: redraw the open cards that show this owner. */
     public void refresh(UUID owner) {
-        for (Session s : sessions.values()) {
-            if (s.owner.equals(owner)) s.bar.name(render(owner));
+        for (Map.Entry<UUID, Session> e : sessions.entrySet()) {
+            Player p = Bukkit.getPlayer(e.getKey());
+            if (p != null && e.getValue().owner.equals(owner)) e.getValue().bar.name(render(owner, p));
         }
     }
 
     public void refreshAll() {
-        for (Session s : sessions.values()) s.bar.name(render(s.owner));
+        for (Map.Entry<UUID, Session> e : sessions.entrySet()) {
+            Player p = Bukkit.getPlayer(e.getKey());
+            if (p != null) e.getValue().bar.name(render(e.getValue().owner, p));
+        }
     }
 
     private void tick() {
@@ -201,15 +243,31 @@ public final class CardUiService implements Listener {
             Player p = Bukkit.getPlayer(e.getKey());
             Session s = e.getValue();
             if (p == null) continue;
-            if (!s.anchor.isValid()) { // killed by a command: without it nothing holds the player
+            // killed by a command: without them nothing holds the player
+            if ((s.anchor != null && (!s.anchor.isValid() || !s.spacer.isValid())) || (s.seat != null && !s.seat.isValid())) {
                 close(p, CloseReason.PLUGIN);
                 continue;
+            }
+            if (s.spacer != null) { // something shook the stack apart: a camera off the player is the unsafe state
+                if (!p.getPassengers().contains(s.spacer)) p.addPassenger(s.spacer);
+                if (!s.spacer.getPassengers().contains(s.anchor)) s.spacer.addPassenger(s.anchor);
             }
             if (!s.cameraLocked && s.seated) {
                 Location l = p.getLocation();
                 if (l.getYaw() != s.origin.getYaw() || l.getPitch() != s.origin.getPitch()) p.setRotation(s.origin.getYaw(), s.origin.getPitch());
             }
         }
+    }
+
+    /** An invisible, unsaved item_display only this player's client knows about. */
+    private ItemDisplay helper(Player p, Location at) {
+        ItemDisplay d = p.getWorld().spawn(at, ItemDisplay.class, e -> {
+            e.setPersistent(false);
+            e.setVisibleByDefault(false);
+            e.getPersistentDataContainer().set(plugin.keys().helper, PersistentDataType.BYTE, (byte) 1);
+        });
+        p.showEntity(plugin, d);
+        return d;
     }
 
     // ------------------------------------------------------------------ opening by right-click
@@ -333,7 +391,7 @@ public final class CardUiService implements Listener {
     public void onDismount(EntityDismountEvent e) {
         if (!(e.getEntity() instanceof Player p)) return;
         Session s = sessions.get(p.getUniqueId());
-        if (s != null && s.seated && e.getDismounted().equals(s.anchor)) e.setCancelled(true); // sneaking does not get you out
+        if (s != null && s.seated && e.getDismounted().equals(s.seat)) e.setCancelled(true); // sneaking does not get you out
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -382,7 +440,7 @@ public final class CardUiService implements Listener {
     public int sweepHelpers() {
         int n = 0;
         for (var w : Bukkit.getWorlds()) {
-            for (ItemDisplay d : w.getEntitiesByClass(ItemDisplay.class)) {
+            for (Entity d : w.getEntities()) {
                 if (d.getPersistentDataContainer().has(plugin.keys().helper)) {
                     d.remove();
                     n++;

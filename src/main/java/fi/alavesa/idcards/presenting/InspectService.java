@@ -24,7 +24,7 @@ import org.bukkit.util.Vector;
  */
 public final class InspectService {
 
-    private record Shown(BossBar bar, UUID presenter, UUID owner) {
+    private record Shown(BossBar bar, UUID presenter, UUID owner, boolean plain) {
     }
 
     private final IdCardsPlugin plugin;
@@ -45,7 +45,7 @@ public final class InspectService {
                 if (presenter == null) continue;
                 BoundingBox box = presenter.getBoundingBox().expand(0.35);
                 for (Player viewer : presenter.getWorld().getNearbyPlayers(presenter.getLocation(), range + 1)) {
-                    if (viewer.equals(presenter) || !viewer.canSee(presenter) || plugin.ui().isOpen(viewer) || !plugin.pack().usable(viewer)) continue;
+                    if (viewer.equals(presenter) || !viewer.canSee(presenter) || plugin.ui().isOpen(viewer)) continue;
                     Location eye = viewer.getEyeLocation();
                     Vector dir = eye.getDirection();
                     RayTraceResult hit = box.rayTrace(eye.toVector(), dir, range);
@@ -72,9 +72,9 @@ public final class InspectService {
             if (shown.containsKey(e.getKey())) continue;
             Player viewer = Bukkit.getPlayer(e.getKey());
             if (viewer == null) continue;
-            BossBar bar = BossBar.bossBar(plugin.renderer().render(plugin.views().of(e.getValue()[1]), true), 0f, BossBar.Color.BLUE, BossBar.Overlay.PROGRESS);
+            BossBar bar = BossBar.bossBar(plugin.renderer().render(plugin.views().of(e.getValue()[1]), true, plugin.ui().plain(viewer)), 0f, BossBar.Color.BLUE, BossBar.Overlay.PROGRESS);
             viewer.showBossBar(bar);
-            shown.put(e.getKey(), new Shown(bar, e.getValue()[0], e.getValue()[1]));
+            shown.put(e.getKey(), new Shown(bar, e.getValue()[0], e.getValue()[1], plugin.ui().plain(viewer)));
         }
     }
 
@@ -86,7 +86,7 @@ public final class InspectService {
     /** A name, skin or prefix changed. */
     public void refresh(UUID owner) {
         for (Shown s : shown.values()) {
-            if (s.owner.equals(owner)) s.bar.name(plugin.renderer().render(plugin.views().of(owner), true));
+            if (s.owner.equals(owner)) s.bar.name(plugin.renderer().render(plugin.views().of(owner), true, s.plain));
         }
     }
 

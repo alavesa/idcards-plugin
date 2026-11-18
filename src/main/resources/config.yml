@@ -68,8 +68,7 @@ luckperms:
 
 pack:
   delivery: auto                  # auto | same-port | http | url | none. See README "Hosting the pack".
-  required: true                  # the vanilla "this server requires a resource pack" prompt
-  on-decline: kick                # kick | disable (the player stays; cards and presenting tell them the pack is needed)
+  required: false                 # true: the vanilla "this server requires a resource pack" prompt (declining then disconnects)
   prompt: ""                      # MiniMessage text for the prompt; empty = vanilla text
   send-delay-ticks: 60            # after joining; later than other plugins' packs, so this pack ends up on top
   public-host: ""                 # the address players reach this server at; empty = the one each player typed

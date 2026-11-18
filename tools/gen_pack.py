@@ -430,13 +430,14 @@ def card_models():
     # Third person: the base item is a charged crossbow, so both arms are raised (vanilla CROSSBOW_HOLD pose). In that
     # pose the hand's "down" points forward: -90 on X stands the card up facing away from the holder.
     hold = {'rotation': [0, 0, 0], 'translation': [0, 0, 0], 'scale': [1.1, 1.1, 1.1]}
+    # First person: vanilla moves a charged crossbow to the middle of the view. Turned so the holder reads the front.
+    FIRST = {'rotation': [0, 180, 0], 'translation': [0, 4.5, 0], 'scale': [0.7, 0.7, 0.7]}
     write_json(os.path.join(NS, 'models', 'item', 'card_presenting.json'), {
         'parent': 'idcards:item/card_3d',
         'display': {'thirdperson_righthand': hold, 'thirdperson_lefthand': hold,
                     'gui': {'rotation': [0, 180, 0], 'translation': [0, 0, 0], 'scale': [1.2, 1.2, 1.2]},
                     'ground': {'rotation': [90, 0, 0], 'translation': [0, 0, 0], 'scale': [0.5, 0.5, 0.5]},
-                    'firstperson_righthand': {'rotation': [0, 180, 0], 'translation': [0, 2, 0], 'scale': [0.6, 0.6, 0.6]},
-                    'firstperson_lefthand': {'rotation': [0, 180, 0], 'translation': [0, 2, 0], 'scale': [0.6, 0.6, 0.6]}}})
+                    'firstperson_righthand': FIRST, 'firstperson_lefthand': FIRST}})
 
 
 def item_def(name, model):
