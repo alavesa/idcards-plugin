@@ -67,7 +67,7 @@ GFX_DOT, GFX_ARROW, GFX_BLOCK = 0xE100, 0xE101, 0xE102
 SCANNER = {'wall': (0.0, 0.0), 'floor': (4.0, -5.0)}
 SCANNER_STATES = ['idle', 'scanning', 'granted', 'denied']
 SLOT_X = 10.5                        # centre of the card slot
-COMPUTER_SCREEN = (3.0, 3.5, 13.0, 12.0, 5.0)   # x0, y0, x1, y1 and the z of the glass (north face of the monitor)
+COMPUTER_SCREEN = (3.0, 4.0, 13.0, 12.5, 5.0)   # x0, y0, x1, y1 and the z of the glass (north face of the monitor)
 
 
 # ---- tiny PNG canvas -------------------------------------------------------------------------------------------------
@@ -262,8 +262,9 @@ def emblem(c, cx, cy, col):
             if 5.2 <= d <= 7.2 or (abs(y) <= 1 and abs(x) <= 3): c.set(cx + x, cy + y, col)
 
 
-def card_art(sample=False):
-    """The card background. sample=True also paints example contents (for the item and model textures)."""
+def card_art(sample=False, labels=False):
+    """The card background. sample=True also paints example contents (for the item and model textures);
+    labels=True paints only the fixed captions (for the card held out in the world, whose details are text displays)."""
     c = Canvas(CARD_W, CARD_H, PAPER)
     rnd = random.Random(11)
     for y in range(CARD_H):                                   # faint security pattern
@@ -291,6 +292,10 @@ def card_art(sample=False):
             c.set(ax + dx * i, ay, PAPER_DARK); c.set(ax, ay + dy * i, PAPER_DARK)
     c.frame(0, 0, CARD_W - 1, CARD_H - 1, EDGE)               # the right-most column is opaque: advance = CARD_W + 1
     for p in ((0, 0), (CARD_W - 1, 0), (0, CARD_H - 1), (CARD_W - 1, CARD_H - 1)): c.set(*p, (0, 0, 0, 0))
+    if labels:
+        c.text(10, 8, 'SECURE FACILITY - PERSONNEL ID', rgb(PALETTE[PAPER_TEXT]))
+        c.text(70, 36, 'NAME', rgb(PALETTE[LABEL])); c.text(70, 68, 'TITLE', rgb(PALETTE[LABEL])); c.text(12, 94, 'SERIAL', rgb(PALETTE[LABEL]))
+        c.text(12, 128, 'PROPERTY OF SITE ADMINISTRATION', rgb(PALETTE[LABEL]))
     if sample:
         c.text(10, 8, 'SECURE FACILITY - PERSONNEL ID', rgb(PALETTE[PAPER_TEXT]))
         c.rect(px + 12, py + 10, px + 35, py + 37, (216, 162, 122)); c.rect(px + 12, py + 6, px + 35, py + 14, (74, 50, 32))
@@ -326,11 +331,6 @@ def icon(rows, palette):
     return c
 
 
-CARD_ICON = ['................', '................', '.eeeeeeeeeeeeee.', '.ebbbbbbbbbbbbe.', '.errrrrrrrrrrre.', '.eppppppppppppe.',
-             '.epffffpddddppe.', '.epfsfspppppppe.', '.epfssfpddddddp.', '.epffffpppppppe.', '.eppppppkpkkpke.', '.epkkkppkpkkpke.',
-             '.eppppppppppppe.', '.eeeeeeeeeeeeee.', '................', '................']
-CARD_ICON[8] = '.epfssfpdddddpe.'
-CARD_PAL = {'e': EDGE, 'b': BAND, 'r': STRIPE, 'p': PAPER, 'f': (120, 128, 138), 's': (216, 162, 122), 'd': (90, 98, 108), 'k': EDGE}
 TOOL_ICON = ['................', '..........ggg...', '.........gcccg..', '.........gcccg..', '..........ggg...', '.........dd.....',
              '........dd......', '.......dd.......', '......dd........', '.....dd.........', '..bbbdd.........', '.bbbbb..........',
              '.bbrbb..........', '.bbbbb..........', '..bbb...........', '................']
@@ -357,87 +357,160 @@ BLOCK_DISPLAY = {
 }   # no "fixed": item displays use that context and must show the model exactly in its cell
 
 
+def shade(c, x0, y0, x1, y1, col, seed=0, grain=6, bevel=True):
+    """A swatch with a little grain and a light top-left / dark bottom-right edge, so flat faces read as material."""
+    rnd = random.Random(seed)
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            d = rnd.randint(-grain, grain)
+            c.set(x, y, tuple(max(0, min(255, v + d)) for v in col))
+    if bevel:
+        hi, lo = tuple(min(255, v + 22) for v in col), tuple(max(0, v - 24) for v in col)
+        for x in range(x0, x1 + 1): c.set(x, y0, hi); c.set(x, y1, lo)
+        for y in range(y0, y1 + 1): c.set(x0, y, hi); c.set(x1, y, lo)
+
+
+LED_COLOURS = ((150, 104, 24), (60, 140, 255), (60, 230, 90), (240, 50, 40))   # idle, scanning, granted, denied
+
+
 def scanner_texture():
-    c = Canvas(32, 32)
-    for i, col in enumerate(((52, 58, 66), (128, 136, 146), (84, 90, 98), (30, 34, 39))):   # body, rail, post, plate
-        c.rect(i * 4, 0, i * 4 + 3, 3, col)
-    for i, col in enumerate(((120, 84, 20), (60, 140, 255), (60, 230, 90), (240, 50, 40))):  # LED per state
-        c.rect(i * 4, 4, i * 4 + 3, 7, col)
-        c.set(i * 4 + 1, 5, tuple(min(255, v + 70) for v in col))
-    c.rect(0, 8, 15, 27, (52, 58, 66))                         # front, 8x10 model px at 2 px each
-    c.frame(0, 8, 15, 27, (30, 34, 39))
-    c.rect(2, 18, 8, 25, (30, 34, 39))                         # keypad
-    for ky in range(3):
-        for kx in range(3): c.rect(3 + kx * 2, 19 + ky * 2, 3 + kx * 2, 19 + ky * 2, (150, 158, 168))
-    c.rect(2, 15, 8, 16, STRIPE)
-    c.rect(11, 10, 13, 25, (20, 23, 27))                       # slot shadow
+    """64x64, 4 texture pixels per model pixel. Swatches in the top rows, the front panel below."""
+    c = Canvas(64, 64)
+    for i, col in enumerate(((46, 51, 58), (150, 157, 166), (84, 90, 98), (26, 29, 34), (196, 201, 207), (12, 14, 17))):
+        shade(c, i * 8, 0, i * 8 + 7, 7, col, seed=i)          # body, rail, post, plate, key, slot
+    for i, col in enumerate(LED_COLOURS):                      # light per state: a lens with a hot spot
+        c.rect(i * 8, 8, i * 8 + 7, 15, tuple(v // 3 for v in col))
+        c.rect(i * 8 + 1, 9, i * 8 + 6, 14, col)
+        c.rect(i * 8 + 2, 10, i * 8 + 3, 11, tuple(min(255, v + 90) for v in col))
+    # front panel: 8 x 10 model px = 32 x 40 texture px at (0,16)
+    shade(c, 0, 16, 31, 55, (46, 51, 58), seed=9, grain=4)
+    c.frame(1, 17, 30, 54, (30, 34, 39))
+    shade(c, 3, 19, 19, 25, (20, 23, 27), seed=3, grain=2)     # recess around the light and the status window
+    c.rect(3, 28, 19, 30, STRIPE)                              # accent stripe
+    for y in (33, 35, 37):                                     # speaker grille
+        for x in range(4, 19, 2): c.set(x, y, (18, 20, 24))
+    shade(c, 3, 40, 19, 52, (24, 27, 32), seed=4, grain=2)     # keypad bed
+    for sx, sy in ((2, 18), (29, 18), (2, 53), (29, 53)):      # screws
+        c.set(sx, sy, (120, 126, 134)); c.set(sx + 1, sy, (70, 75, 82))
+    c.rect(22, 18, 30, 53, (18, 20, 24))                       # shadow behind the slot rails
+    for y in range(20, 52, 4): c.set(26, y, (60, 66, 74))      # guide marks in the slot
     return c
 
 
 def scanner_model(mount, state):
     dy, dz = SCANNER[mount]
-    body, rail, post, plate = (0, 0, 2, 2), (2, 0, 4, 2), (4, 0, 6, 2), (6, 0, 8, 2)
+    T = lambda i: (i * 2, 0, i * 2 + 2, 2)                     # swatch i in uv units
+    body, rail, post, plate, key, slot = (T(i) for i in range(6))
     s = SCANNER_STATES.index(state)
-    led = (s * 2, 2, s * 2 + 2, 4)
+    led = (s * 2 + 0.25, 2.25, s * 2 + 1.75, 3.75)
+    B = lambda a, b, uv, faces=None, light=0: box((a[0], a[1] + dy, a[2] + dz), (b[0], b[1] + dy, b[2] + dz), uv, faces, light)
     els = [
-        box((3.5, 2.5 + dy, 15 + dz), (12.5, 13.5 + dy, 16 + dz), plate),
-        box((4, 3 + dy, 13 + dz), (12, 13 + dy, 15 + dz), body, {'north': (0, 4, 8, 14)}),
-        box((9, 3 + dy, 11.5 + dz), (9.9, 13 + dy, 13 + dz), rail),
-        box((11.1, 3 + dy, 11.5 + dz), (12, 13 + dy, 13 + dz), rail),
-        box((9.9, 3 + dy, 12.6 + dz), (11.1, 13 + dy, 13 + dz), plate),
-        box((5, 10.5 + dy, 12.6 + dz), (7.5, 12 + dy, 13 + dz), led, light=15),
+        B((3, 2, 15), (13, 14, 16), plate),                                         # wall plate
+        B((4, 3, 12.5), (12, 13, 15), body, {'north': (0, 4, 8, 14)}),              # housing
+        B((3.6, 13, 12.2), (12.4, 13.7, 15), plate),                                # top cap
+        B((3.6, 2.3, 12.2), (12.4, 3, 15), plate),                                  # bottom cap
+        B((8.9, 3, 11.4), (9.9, 13, 12.5), rail),                                   # slot rails
+        B((11.1, 3, 11.4), (12.1, 13, 12.5), rail),
+        B((8.7, 12.2, 11.2), (9.9, 13.2, 12.5), rail),                              # flared slot mouth
+        B((11.1, 12.2, 11.2), (12.3, 13.2, 12.5), rail),
+        B((9.9, 3, 12.3), (11.1, 13, 12.5), slot),                                  # slot floor
+        B((4.6, 10.6, 12.2), (6.6, 12.2, 12.5), plate),                             # light housing
+        B((4.9, 10.9, 12.05), (6.3, 11.9, 12.2), led, light=15),                    # the light
+        B((6.9, 10.9, 12.3), (8.4, 11.9, 12.5), led, light=10),                     # status window in the same colour
     ]
-    if mount == 'floor':
-        els += [box((7, 1, 8.5), (9.5, 7.5, 10.5), post), box((4.5, 0, 5.5), (11.5, 1, 12.5), plate)]
+    for kx in range(3):                                                             # 3 x 3 keypad
+        for ky in range(3):
+            els.append(B((4.8 + kx * 1.15, 3.6 + ky * 1.0, 12.25), (5.7 + kx * 1.15, 4.3 + ky * 1.0, 12.5), key))
+    if mount == 'wall':
+        els.append(box((7.4, 0, 15.3), (8.6, 2.3, 16), post))                       # cable conduit
+    else:
+        els += [box((6.8, 1.4, 8.2), (9.8, 7, 10.8), post), box((6.3, 0.8, 7.7), (10.3, 1.4, 11.3), rail),
+                box((4, 0, 5), (12, 0.8, 13), plate), box((7.6, 2, 10.8), (9, 6.4, 11.2), plate)]
     return {'textures': {'0': 'idcards:block/scanner', 'particle': 'idcards:block/scanner'}, 'elements': els, 'display': BLOCK_DISPLAY}
 
 
+CASE, CASE_SHADE, PLASTIC, KEYCAP = (198, 196, 184), (164, 162, 150), (38, 41, 47), (176, 174, 164)
+
+
 def computer_texture():
-    c = Canvas(64, 64)
-    for i, col in enumerate(((196, 198, 190), (40, 44, 50), (120, 124, 120), (160, 162, 154))):   # case, dark, key, shade
-        c.rect(i * 8, 0, i * 8 + 7, 7, col)
-    c.rect(0, 16, 39, 49, (6, 18, 12))                         # screen glass, 10 x 8.5 model px at 4 px each
-    for y in range(16, 50, 2): c.rect(0, y, 39, y, (9, 26, 17))
-    c.frame(0, 16, 39, 49, (2, 8, 5))
-    c.rect(0, 52, 39, 63, (40, 44, 50))                        # keyboard top
-    for ky in range(3):
-        for kx in range(12): c.rect(2 + kx * 3, 54 + ky * 3, 3 + kx * 3, 55 + ky * 3, (150, 154, 150))
-    c.rect(40, 16, 63, 49, (196, 198, 190))                    # monitor front with the bezel
-    c.frame(40, 16, 63, 49, (160, 162, 154))
-    c.rect(58, 46, 60, 47, (60, 230, 90))                      # power light
+    """128x128, 8 texture pixels per model pixel."""
+    c = Canvas(128, 128)
+    for i, col in enumerate((CASE, CASE_SHADE, PLASTIC, KEYCAP, (100, 102, 96), (60, 230, 90))):
+        shade(c, i * 16, 0, i * 16 + 15, 15, col, seed=20 + i, grain=4, bevel=i != 5)   # case, shade, plastic, key, vent, light
+    # the glass: 10 x 8.5 model px = 80 x 68 at (0,16)
+    for y in range(68):
+        for x in range(80):
+            edge = min(x, 79 - x, y, 67 - y)
+            g = 16 + (y % 2) * 5 - max(0, 8 - edge)           # scanlines, darker towards the bezel
+            c.set(x, 16 + y, (4 + g // 4, max(4, g), 6 + g // 2))
+    for i in range(18):                                        # a soft reflection in the top-left corner
+        for t in range(3): c.set(6 + i + t, 22 + (18 - i) // 2, (20, 44, 30))
+    c.frame(0, 16, 79, 83, (2, 6, 4))
+    # keyboard top: 10 x 2.4 model px = 80 x 19 at (0,88): three rows of keys
+    shade(c, 0, 88, 79, 107, PLASTIC, seed=31, grain=2, bevel=False)
+    for r in range(3):
+        for k in range(13):
+            x0 = 2 + k * 6 + r
+            if x0 + 4 > 78: continue
+            c.rect(x0, 90 + r * 6, x0 + 4, 93 + r * 6, KEYCAP); c.rect(x0, 94 + r * 6, x0 + 4, 94 + r * 6, (120, 118, 110))
+    # base unit front: 14 x 2 model px = 112 x 16 at (0,110): drive slot, vents, badge
+    shade(c, 0, 110, 111, 125, CASE, seed=32, grain=3)
+    c.rect(8, 116, 52, 118, PLASTIC); c.rect(10, 120, 20, 121, CASE_SHADE)
+    for x in range(64, 96, 3): c.rect(x, 114, x, 122, CASE_SHADE)
+    c.rect(100, 115, 106, 117, STRIPE)
+    # vents for the back of the monitor: 16 x 16 at (96,16)
+    shade(c, 96, 16, 111, 31, CASE_SHADE, seed=33, grain=3)
+    for y in range(18, 31, 3): c.rect(98, y, 109, y, (96, 94, 86))
     return c
 
 
 def computer_model():
-    case, dark, key, shade = (0, 0, 2, 2), (2, 0, 4, 2), (4, 0, 6, 2), (6, 0, 8, 2)
+    T = lambda i: (i * 2, 0, i * 2 + 2, 2)
+    case, shadec, plastic, key, vent, light = (T(i) for i in range(6))
     x0, y0, x1, y1, z = COMPUTER_SCREEN
+    top, bottom = y1 + 0.7, y0 - 0.7                           # monitor shell around the glass
     els = [
-        box((1, 0, 0.5), (15, 2, 14), shade, {'up': case}),
-        box((2, 2, 5), (14, 13, 12), case, {'north': (10, 4, 16, 12.5)}),
-        box((4, 3, 12), (12, 11, 14.5), dark),
-        box((x0, y0, z - 0.1), (x1, y1, z), dark, {'north': (0, 4, 10, 12.5)}, light=15),
-        box((3, 2, 1), (13, 2.6, 4), dark, {'up': (0, 13, 10, 16)}),
+        box((1, 0.3, 3), (15, 2.3, 14.5), case, {'north': (0, 13.75, 14, 15.75), 'down': shadec}),      # base unit
+        box((12.4, 0.9, 2.9), (13.2, 1.3, 3), light, light=15),                                         # power light
+        box((6.3, 2.3, 7), (9.7, bottom, 10.5), shadec),                                                # neck
+        box((x0 - 1, bottom, z), (x1 + 1, top, 11.5), case),                                            # monitor shell
+        box((x0 - 1, bottom, z - 0.35), (x0, top, z), case),                                            # bezel: left, right, bottom, top
+        box((x1, bottom, z - 0.35), (x1 + 1, top, z), case),
+        box((x0, bottom, z - 0.35), (x1, y0, z), case),
+        box((x0, y1, z - 0.35), (x1, top, z), case),
+        box((x0, y0, z - 0.02), (x1, y1, z), plastic, {'north': (0, 2, 10, 10.5)}, light=15),          # the glass
+        box((x0 + 0.5, bottom + 1, 11.5), (x1 - 0.5, top - 1, 14), shadec, {'south': (12, 2, 14, 4), 'up': (12, 2, 14, 4)}),  # tube housing
+        box((x1 - 1.6, bottom + 0.15, z - 0.4), (x1 - 1.0, bottom + 0.5, z - 0.35), light, light=15),   # monitor light
+        box((2.5, 0, 0.2), (13.5, 0.8, 2.8), plastic),                                                  # keyboard
+        box((3, 0.8, 0.4), (13, 1.05, 2.6), plastic, {'up': (0, 11, 10, 13.5)}),                        # key bed
     ]
+    for fx, fz in ((1.5, 3.5), (13.5, 3.5), (1.5, 13), (13.5, 13)):                                     # feet
+        els.append(box((fx - 0.5, 0, fz - 0.5), (fx + 0.5, 0.3, fz + 0.5), plastic))
     return {'textures': {'0': 'idcards:block/computer', 'particle': 'idcards:block/computer'}, 'elements': els, 'display': BLOCK_DISPLAY}
 
 
 def card_models():
-    """card_3d: a 12 x 7.5 px slab, front on its north side. card_presenting adds the hand transforms."""
+    """card_3d: a 12 x 7.5 px slab, front on its north side, with example contents (the prop in the scanner slot).
+    card_blank: the same slab with the bare card on both faces; presenting writes the real details on it."""
     edge = (0, 0, 0.5, 0.5)
     el = box((2, 4.25, 7.875), (14, 11.75, 8.125), edge, {'north': (0, 0, 16, 8), 'south': (0, 8, 16, 16)})
-    base = {'textures': {'0': 'idcards:item/card_face', 'particle': 'idcards:item/card_face'}, 'elements': [el]}
-    write_json(os.path.join(NS, 'models', 'item', 'card_3d.json'), base)
-    # Third person: the base item is a charged crossbow, so both arms are raised (vanilla CROSSBOW_HOLD pose). In that
-    # pose the hand's "down" points forward: -90 on X stands the card up facing away from the holder.
-    hold = {'rotation': [0, 0, 0], 'translation': [0, 0, 0], 'scale': [1.1, 1.1, 1.1]}
-    # First person: vanilla moves a charged crossbow to the middle of the view. Turned so the holder reads the front.
-    FIRST = {'rotation': [0, 180, 0], 'translation': [0, 4.5, 0], 'scale': [0.7, 0.7, 0.7]}
-    write_json(os.path.join(NS, 'models', 'item', 'card_presenting.json'), {
-        'parent': 'idcards:item/card_3d',
-        'display': {'thirdperson_righthand': hold, 'thirdperson_lefthand': hold,
-                    'gui': {'rotation': [0, 180, 0], 'translation': [0, 0, 0], 'scale': [1.2, 1.2, 1.2]},
-                    'ground': {'rotation': [90, 0, 0], 'translation': [0, 0, 0], 'scale': [0.5, 0.5, 0.5]},
-                    'firstperson_righthand': FIRST, 'firstperson_lefthand': FIRST}})
+    write_json(os.path.join(NS, 'models', 'item', 'card_3d.json'),
+               {'textures': {'0': 'idcards:item/card_face', 'particle': 'idcards:item/card_face'}, 'elements': [el]})
+    face = (0, 0, CARD_W / 16.0, CARD_H / 16.0)                # the art sits in the top-left of a 256x256 texture
+    el = box((2, 4.25, 7.875), (14, 11.75, 8.125), (15, 15, 15.5, 15.5), {'north': face, 'south': face})
+    write_json(os.path.join(NS, 'models', 'item', 'card_blank.json'),
+               {'textures': {'0': 'idcards:item/card_blank', 'particle': 'idcards:item/card_blank'}, 'elements': [el]})
+
+
+def card_icon():
+    """The inventory icon, 64x64: the card with example contents, a soft shadow under it."""
+    c = Canvas(64, 64)
+    small = card_art(sample=True).scaled(60, 38)
+    c.rect(4, 16, 63, 53, (0, 0, 0, 70))
+    c.blit(small, 2, 13)
+    c.frame(2, 13, 61, 50, EDGE)
+    for p in ((2, 13), (61, 13), (2, 50), (61, 50)): c.set(*p, (0, 0, 0, 0))
+    return c
 
 
 def item_def(name, model):
@@ -465,7 +538,7 @@ def art():
         Canvas(182, 5).save(os.path.join(ROOT, 'assets', 'minecraft', 'textures', 'gui', 'sprites', 'boss_bar', name + '.png'))
 
     # items
-    icon(CARD_ICON, CARD_PAL).save(os.path.join(NS, 'textures', 'item', 'id_card.png'))
+    card_icon().save(os.path.join(NS, 'textures', 'item', 'id_card.png'))
     icon(TOOL_ICON, TOOL_PAL).save(os.path.join(NS, 'textures', 'item', 'link_tool.png'))
     face = Canvas(64, 80)
     face.blit(card_art(sample=True).scaled(64, 40), 0, 0)
@@ -474,8 +547,13 @@ def art():
     for name in ('id_card', 'link_tool'):
         write_json(os.path.join(NS, 'models', 'item', name + '.json'), {'parent': 'minecraft:item/generated', 'textures': {'layer0': 'idcards:item/' + name}})
         item_def(name, 'item/' + name)
+    blank = Canvas(256, 256, EDGE)
+    blank.blit(card_art(labels=True), 0, 0)
+    blank.save(os.path.join(NS, 'textures', 'item', 'card_blank.png'))
     card_models()
-    item_def('id_card_presenting', 'item/card_presenting')
+    item_def('card_blank', 'item/card_blank')
+    # what a presenting player's hand is said to hold: nothing visible (the card is a group of display entities)
+    write_json(os.path.join(NS, 'items', 'empty.json'), {'model': {'type': 'minecraft:empty'}})
     item_def('card_prop', 'item/card_3d')
 
     # blocks
@@ -524,11 +602,12 @@ def layout():
     for k, v in order:
         lines.append(f'slot.{k}={v[0]},{v[1]},{v[2]},{v[3]},{v[6]}')
     for mount, (dy, dz) in SCANNER.items():
-        hit = (3.5, 2.5, 11, 12.5, 13.5, 16) if mount == 'wall' else (3.5, 0, 5.5, 12.5, 17.5, 12.5)
+        hit = (3, 2, 11, 13, 14, 16) if mount == 'wall' else (3, 0, 5, 13, 18, 13)
         lines.append(f'scanner.{mount}.hitbox=' + ','.join(str(v) for v in hit))
         lines.append(f'scanner.{mount}.swipe={SLOT_X},{17.5 + dy},{4.5 + dy},{round(11.3 + dz, 3)}')   # x, y from, y to, z of the card centre
     lines.append('computer.hitbox=-0.1,-0.05,-0.1,16.1,16.1,16.1')
     lines.append('computer.screen=' + ','.join(str(v) for v in COMPUTER_SCREEN))
+    lines.append(f'photo.scale={SLOTS["photo"][3]}')
     with open(os.path.join(RES, 'layout.properties'), 'w') as f:
         f.write('\n'.join(lines) + '\n')
 

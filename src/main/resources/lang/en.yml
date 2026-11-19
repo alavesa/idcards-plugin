@@ -1,6 +1,8 @@
 # IdCards texts, MiniMessage. card.* lines marked (card) are printed ON the card in the card font:
 # capitals, digits and punctuation only, no tags, and they are cut at the width of their field.
 
+version: 2                        # raised by the plugin when texts change; an older file on disk is kept as en.yml.old
+
 prefix: "<dark_gray>[<red>ID<dark_gray>]</dark_gray> <gray>"
 
 item:
@@ -24,11 +26,11 @@ card:
   label-title: "TITLE"                          # (card)
   label-serial: "SERIAL"                        # (card)
   footer: "PROPERTY OF SITE ADMINISTRATION"     # (card) 33 characters
-  hint-close: "LEFT CLICK TO CLOSE"             # (card) top-left corner of the screen
+  hint-close: "LEFT CLICK OR SHIFT TO CLOSE"    # (card) top-left corner of the screen
   unknown-name: "UNKNOWN"                       # (card) when nobody by the card's UUID is known
   no-permission: "You may not use ID cards."
   unreadable: "<red>This card cannot be read."
-  plain: "<white><name></white> <dark_gray>|</dark_gray> <prefix> <dark_gray>|</dark_gray> <gray><serial></gray> <dark_gray>- left click to close"   # /idcard plain
+  plain: "<white><name></white> <dark_gray>|</dark_gray> <prefix> <dark_gray>|</dark_gray> <gray><serial></gray> <dark_gray>- left click or shift to close"   # /idcard plain
   plain-inspect: "<gray>ID:</gray> <white><name></white> <dark_gray>|</dark_gray> <prefix> <dark_gray>|</dark_gray> <gray><serial>"
   received: "You received an ID card."
 
@@ -40,9 +42,6 @@ block:
   no-permission-break: "<red>You may not remove this."
   cannot-place-here: "<red>It does not fit here."
   needs-support: "<red>It needs a solid block to sit on."
-
-scanner:
-  need-card: "Hold your ID card to scan it."
 
 computer:
   no-permission: "<red>You may not read this terminal's log."

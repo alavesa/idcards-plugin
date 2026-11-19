@@ -1,6 +1,6 @@
 {
  "model": {
   "type": "minecraft:model",
-  "model": "idcards:item/card_presenting"
+  "model": "idcards:item/card_blank"
  }
 }

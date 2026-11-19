@@ -10,6 +10,17 @@ shader, presenting the card with F, placeable card scanners and scanner computer
 
 Version 1.0 is a rewrite. IdCards 0.x (paper card + hologram) is in the git history; see "Upgrading from 0.x".
 
+## Changes in 1.0.2
+
+- **The presented card shows the real details.** F now puts a card in the world in front of the chest, between
+  the raised hands, with the owner's face, name, prefix, serial and barcode on it; the holder sees the same details
+  on their side of it. It is a group of display entities that follows the player.
+- **The card no longer closes when opened while walking.** Refusing the first steps made the server fire a
+  teleport event, which closed it again.
+- **Shift closes the card too**, besides left click.
+- More detailed scanner and computer models and a 64x64 card icon.
+- No chat message when a scanner is clicked without a card.
+
 ## Changes in 1.0.1
 
 - **Left click no longer kicks or crashes.** In 1.0.0 the camera stood free inside the player's own hit box, so a
@@ -33,13 +44,13 @@ ran for real, the physical input did not. ☐ means not exercised at all.
 |---|---|
 | ✅ | Pack loads, shader compiles on the client (stand-alone and merged with Radio + SuperbVehicles + CCTV) |
 | ✅ | Full-screen card: background, face, name, prefix, serial, barcode, hint in the corner, camera lock engaged |
-| ✅ | Presenting: first person card in the middle of the view; third person both arms raised, card readable |
+| ✅ | Presenting: both arms raised, the card with the real details in front of the chest; the holder's side of it |
 | ✅ | Inspect view on a second client looking at the presenter |
 | ✅ | Scanner (wall and floor) and computer models, facing, light states, swipe animation, screen texts and face |
 | ✅ | Scan granted / denied (replaced card), log dialog, blocks + links + log surviving a restart |
 | ⚙ | Placing a scanner by right-click, closing the card by left click, F to present and to stop |
 | ☐ | **A real left click while the card is open.** The kick was found and fixed by reading the client and server code (the client's target rule, the server's kick condition); it could not be reproduced or re-tested here |
-| ☐ | Right-click to open, scrolling while frozen, breaking (survival hits, creative), protection plugins, pistons / explosions / water |
+| ☐ | Right-click to open (also while walking), shift to close, the presented card following a walking player, scrolling while frozen, breaking (survival hits, creative), protection plugins, pistons / explosions / water |
 | ☐ | Link Tool clicks, log dialog page buttons, sounds (generated; nobody has listened to them) |
 | ☐ | LuckPerms prefixes and change events (not installed on the test server), real skins (offline accounts) |
 | ☐ | The seat-and-rotation fallback freeze, `/idcard plain`, hosting behind a proxy |
@@ -77,7 +88,7 @@ Go through "Manual testing checklist" at the end before relying on it.
 | Problem | Chosen | Why, and what it costs |
 |---|---|---|
 | Camera lock | Set-camera packet onto an invisible item_display riding the player (`nms/CameraBridge`, 3 reflective calls) | The only method with no jitter: the client itself stops moving and looking. Costs: one packet outside the API (isolated, falls back when unavailable); the hotbar disappears while the card is open; the view rises 0.2 blocks; the hand item stays visible and tilts slightly with the mouse. Rejected: spectator mode (changes the player for everyone), per-tick rotation reset (shakes), attributes + seat alone (cannot stop looking). |
-| Arm animation | Equipment packets: every client in range, the holder's included, is told the hand holds a charged crossbow with the card model | Both arms raised in third person, the card in the middle of the view in first person, with **no change to the real item**. Costs: the pose is vanilla's crossbow pose, not a custom one (a server cannot play custom player animations); the holder's own arms are not drawn in first person; a resync of the hand slot shows the plain card until the next F. |
+| Arm animation | Equipment packets say the hand holds a charged crossbow with an empty model (arms up), and a group of display entities in front of the chest is the card, with the real details | Both arms raised and a readable, personal card, with **no change to the real item**. Costs: the pose is vanilla's crossbow pose (a server cannot play custom player animations); 11 unsaved entities per presenting player, moved once per tick; the card can trail a fast-moving player by a few centimetres; the fixed captions on that card are baked into its texture in English. |
 | Player head | Player-head text object with cached `textures` | Real skin, crisp at any size, works offline, no server-side image work. |
 | HUD channel | Boss bar (name = the whole card) | The only channel other plugins cannot overwrite. Costs: the pack blanks the BLUE boss bar graphic (same as the Radio plugin); other plugins' blue bars lose their bar for pack users. |
 | Custom blocks | Database row + non-persistent item_display + Interaction + (computer) barrier | No orphans or duplicates by construction; survives restarts through the database, not through saved entities. Costs: breaking is "hit N times", not a mining bar; computers are blast- and piston-proof because barriers are. |
@@ -188,8 +199,12 @@ dropping, opening or clicking an inventory, death, quit, teleport, world or game
 the hand stops it. `present.cooldown-ticks` rate-limits starts.
 
 - Players within `present.render-distance`, and the presenter's own client, are told (equipment packet) that the
-  presenter holds a charged crossbow with the card model: vanilla raises both arms in third person and puts the
-  card in the middle of the view in first person. Refreshed every `present.update-interval-ticks`.
+  presenter holds a charged crossbow with an empty model: vanilla raises both arms. Refreshed every
+  `present.update-interval-ticks`.
+- The card itself is a group of display entities in front of the chest: a blank card slab and text displays for
+  face, name, prefix, serial and barcode. Others see the outward face; the holder alone sees the inward face. The
+  group is teleported to the player every tick they move (not ridden: Bukkit refuses to teleport a player carrying
+  passengers, which would break other plugins' teleports while somebody presents).
 - A player within `inspect.range` blocks whose crosshair is on the presenter (box ray test, then a block ray test
   for walls) gets the card on the right side of their HUD until they look away. They are not frozen.
 - The real item is never touched. The stand-in item is tagged and is refused and deleted wherever a creative
@@ -274,7 +289,8 @@ server pack build reads it; 1.0 does not use it.
 
 Card
 - [ ] `/idcard give` yourself a card; rename it on an anvil; it still opens and scans as yours
-- [ ] Right-click (air, block, either hand): card opens at once, no chat message
+- [ ] Right-click (air, block, either hand): card opens at once, no chat message, also while walking
+- [ ] Shift closes it
 - [ ] While open: WASD, jump, mouse, scroll, number keys, F, Q, E do nothing
 - [ ] **Left click closes it, looking in every direction (straight down too), without a kick or crash**
 - [ ] Closes on damage, death, `/tp`, `/gamemode`, `/idcard close`, `/idcard reload` (stays open), plugin disable
@@ -286,7 +302,8 @@ Card
 
 Presenting
 - [ ] F holds the card out; F again puts it away; so do scrolling, dropping, opening the inventory
-- [ ] You see the card held in the middle of your view. Another player sees both arms raised and the card
+- [ ] You see your card with your details in front of you. Another player sees both arms raised and the card with your details
+- [ ] Walk, turn and jump while presenting: the card stays in front of you
 - [ ] Another player within 5 blocks looking at you gets the card on their HUD; it goes when they look away
 - [ ] Creative: while presenting, open the inventory and click the card: no stand-in item appears
 

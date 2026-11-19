@@ -41,6 +41,7 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
@@ -413,7 +414,19 @@ public final class CardUiService implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTeleport(PlayerTeleportEvent e) {
         Session s = sessions.get(e.getPlayer().getUniqueId());
-        if (s != null && !s.teleporting) close(e.getPlayer(), CloseReason.TELEPORT);
+        if (s == null || s.teleporting) return;
+        // Refusing a step in onMove makes the server "teleport" the player back by a few centimetres, and that
+        // fires this event too. Only a real change of place closes the card.
+        Location from = e.getFrom(), to = e.getTo();
+        if (from.getWorld() == to.getWorld() && from.distanceSquared(to) < 4) return;
+        close(e.getPlayer(), CloseReason.TELEPORT);
+    }
+
+    /** Shift closes the card as well: the sneak key still reaches the server while the camera is locked. */
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onSneak(PlayerToggleSneakEvent e) {
+        Session s = sessions.get(e.getPlayer().getUniqueId());
+        if (s != null && e.isSneaking() && settled(s)) close(e.getPlayer(), CloseReason.CLICK);
     }
 
     @EventHandler

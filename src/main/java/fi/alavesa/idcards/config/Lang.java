@@ -29,7 +29,15 @@ public final class Lang {
         } catch (java.io.IOException e) {
             plugin.getLogger().warning("Could not read the bundled lang/en.yml: " + e);
         }
-        if (!new File(plugin.getDataFolder(), "lang/en.yml").exists()) plugin.saveResource("lang/en.yml", false);
+        // the English file on disk follows the plugin: an outdated one is set aside, not mixed with new texts
+        File english = new File(plugin.getDataFolder(), "lang/en.yml");
+        int bundled = Integer.parseInt(text.getOrDefault("version", "0"));
+        if (english.exists() && YamlConfiguration.loadConfiguration(english).getInt("version", 1) < bundled) {
+            File backup = new File(plugin.getDataFolder(), "lang/en.yml.old");
+            backup.delete();
+            if (english.renameTo(backup)) plugin.getLogger().info("lang/en.yml was from an older version: kept as en.yml.old, new texts written");
+        }
+        if (!english.exists()) plugin.saveResource("lang/en.yml", false);
         File file = new File(plugin.getDataFolder(), "lang/" + language + ".yml");
         if (file.exists()) read(YamlConfiguration.loadConfiguration(file));
         else plugin.getLogger().warning("lang/" + language + ".yml not found; using English");
@@ -37,7 +45,7 @@ public final class Lang {
 
     private void read(YamlConfiguration yaml) {
         for (String key : yaml.getKeys(true)) {
-            if (yaml.isString(key)) text.put(key, yaml.getString(key));
+            if (yaml.isString(key) || yaml.isInt(key)) text.put(key, String.valueOf(yaml.get(key)));
         }
     }
 

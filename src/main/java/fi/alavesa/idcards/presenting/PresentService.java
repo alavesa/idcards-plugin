@@ -37,18 +37,21 @@ import org.bukkit.persistence.PersistentDataType;
  * Presenting: F while holding a card in the main hand holds it out; F again, or anything that takes the card out of
  * the hand, puts it away.
  *
- * <p><b>How the pose is made.</b> A server cannot play player animations, but vanilla poses a player by what is in
- * their hand, and a server may tell clients something else about that hand than what the inventory holds. While
- * presenting, every client in range (the presenter's own included) is told the hand holds a charged crossbow whose
- * item model is the card. A charged crossbow is the one item whose idle pose raises both arms, so in third person
- * the arms come up and the card (a 3D model, placed by its display transform) is held out in front of the chest;
- * in first person vanilla moves a charged crossbow to the middle of the view, so the holder sees the card held out
- * in front of them.
- *
- * <p>It is sent with {@code Player.sendEquipmentChange}: packets only. <b>The real item never changes</b>, so there
- * is nothing to swap back, lose or duplicate, and nothing to restore after a crash: the server's inventory holds the
- * card the whole time, and any inventory resync shows it again. The stand-in carries a tag ({@code fake}) and is
- * refused and deleted wherever it could turn real (ItemGuard), which only a creative-mode client could try.
+ * <p><b>How it is shown.</b> Two parts:
+ * <ul>
+ *   <li>The ARMS. A server cannot play player animations, but vanilla poses a player by what is in their hand, and a
+ *       server may tell clients something else about that hand than what the inventory holds. While presenting,
+ *       every client in range (the presenter's own included) is told the hand holds a charged crossbow with an
+ *       empty model. A charged crossbow is the one item whose idle pose raises both arms, so the arms come up, with
+ *       nothing visible in them.</li>
+ *   <li>The CARD. A group of display entities in front of the chest, between the hands, showing the real details
+ *       of the card's owner ({@link CardProp}).</li>
+ * </ul>
+ * The hand is changed with {@code Player.sendEquipmentChange}: packets only. <b>The real item never changes</b>, so
+ * there is nothing to swap back, lose or duplicate, and nothing to restore after a crash: the server's inventory
+ * holds the card the whole time, and any inventory resync shows it again. The stand-in carries a tag ({@code fake})
+ * and is refused and deleted wherever it could turn real (ItemGuard), which only a creative-mode client could try.
+ * The display entities are not saved.
  *
  * <p>Presenters and their viewers are refreshed every {@code present.update-interval-ticks}: new players in range
  * get the stand-in, players who left range get the real item back. Main thread only.
@@ -60,9 +63,10 @@ public final class PresentService implements Listener {
         boolean valid;
         int slot, startedTick;
         final Set<UUID> viewers = new HashSet<>();
+        CardProp prop;
     }
 
-    private static final Key PRESENTING_MODEL = Key.key("idcards", "id_card_presenting");
+    private static final Key PRESENTING_MODEL = Key.key("idcards", "empty");
 
     private final IdCardsPlugin plugin;
     private final InspectService inspect;
@@ -87,6 +91,7 @@ public final class PresentService implements Listener {
             @Override
             public void run() {
                 tick++;
+                for (State s : presenting.values()) s.prop.follow();
                 if (tick % plugin.settings().presentUpdateInterval == 0) updateViewers();
                 if (tick % plugin.settings().inspectInterval == 0) inspect.update(owners());
             }
@@ -136,6 +141,7 @@ public final class PresentService implements Listener {
         s.valid = data.valid();
         s.slot = p.getInventory().getHeldItemSlot();
         s.startedTick = now;
+        s.prop = new CardProp(plugin, p, plugin.views().of(s.owner));
         presenting.put(p.getUniqueId(), s);
         p.sendEquipmentChange(p, EquipmentSlot.HAND, othersItem); // the holder's own first-person view
         updateViewers(p, s);
@@ -145,6 +151,7 @@ public final class PresentService implements Listener {
     public void stop(Player p) {
         State s = presenting.remove(p.getUniqueId());
         if (s == null) return;
+        s.prop.remove();
         ItemStack real = p.getInventory().getItemInMainHand();
         for (UUID id : s.viewers) {
             Player v = Bukkit.getPlayer(id);
@@ -174,8 +181,9 @@ public final class PresentService implements Listener {
                 continue;
             }
             // the card left the hand in a way no event told us about (another plugin, a command)
+            // ... or the card's entities were removed (/kill): without them there is nothing to show
             if (!plugin.cards().isCard(p.getInventory().getItemInMainHand()) || p.getInventory().getHeldItemSlot() != s.slot
-                    || (max > 0 && now - s.startedTick > max)) {
+                    || (max > 0 && now - s.startedTick > max) || !s.prop.valid()) {
                 stop(p);
                 continue;
             }
@@ -203,6 +211,9 @@ public final class PresentService implements Listener {
 
     /** A name, skin or prefix changed: redraw the HUDs that show this owner. */
     public void refresh(UUID owner) {
+        for (State s : presenting.values()) {
+            if (s.owner.equals(owner)) s.prop.write(plugin.views().of(owner), s.prop.location());
+        }
         inspect.refresh(owner);
     }
 

@@ -111,10 +111,7 @@ public final class ScannerType extends BlockType {
             return;
         }
         ItemStack card = plugin.cards().held(player);
-        if (card == null) {
-            plugin.lang().send(player, "scanner.need-card");
-            return;
-        }
+        if (card == null) return; // no message: an empty hand on a scanner is not worth a chat line
         plugin.scans().scan(player, block, card);
     }
 
