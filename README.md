@@ -10,6 +10,12 @@ shader, presenting the card with F, placeable card scanners and scanner computer
 
 Version 1.0 is a rewrite. IdCards 0.x (paper card + hologram) is in the git history; see "Upgrading from 0.x".
 
+## Changes in 1.0.3
+
+- **Works with SCP079.** SCP079 builds its caption text shader on top of the IdCards one and puts its pack above
+  this one. IdCards no longer re-sends its own pack over it, which would start a tug of war over the top place
+  (several resource reloads on every join).
+
 ## Changes in 1.0.2
 
 - **The presented card shows the real details.** F now puts a card in the world in front of the chest, between
