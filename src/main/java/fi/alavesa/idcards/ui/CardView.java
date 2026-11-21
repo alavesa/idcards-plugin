@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.UUID;
 import net.kyori.adventure.text.object.PlayerHeadObjectContents;
 
-/** Everything a card shows, already looked up. Rendering it needs nothing else. */
+/** Everything a card shows, already looked up. Drawing it needs nothing else. */
 public record CardView(UUID owner, String name, List<PrefixFormatter.Run> prefix, String serial, long barcode,
                        PlayerHeadObjectContents head) {
 

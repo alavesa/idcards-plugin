@@ -1,6 +1,39 @@
 {
  "model": {
-  "type": "minecraft:model",
-  "model": "idcards:item/id_card"
+  "type": "minecraft:select",
+  "property": "minecraft:display_context",
+  "cases": [
+   {
+    "when": [
+     "firstperson_righthand",
+     "firstperson_lefthand"
+    ],
+    "model": {
+     "type": "minecraft:empty"
+    }
+   },
+   {
+    "when": [
+     "thirdperson_righthand",
+     "thirdperson_lefthand",
+     "head"
+    ],
+    "model": {
+     "type": "minecraft:condition",
+     "property": "minecraft:using_item",
+     "on_true": {
+      "type": "minecraft:empty"
+     },
+     "on_false": {
+      "type": "minecraft:model",
+      "model": "idcards:item/card_hand"
+     }
+    }
+   }
+  ],
+  "fallback": {
+   "type": "minecraft:model",
+   "model": "idcards:item/id_card"
+  }
  }
 }

@@ -1,4 +1,4 @@
-# IdCards. /idcard reload applies everything here; values marked (pack) rebuild the resource pack and send it again.
+# IdCards. /idcard reload applies everything here.
 
 language: en                      # plugins/IdCards/lang/<language>.yml
 
@@ -12,37 +12,15 @@ card:
   on-death: keep                  # keep (stays in the inventory) | drop (like any item) | destroy
   allow-containers: true          # false: cards cannot be put into chests, barrels, shulker boxes, hoppers ...
 
-ui:                               # the full-screen card (right-click)
-  scale: 0                        # (pack) 0 = the largest whole scale that fits the player's screen; else fixed, e.g. 1 or 2
-  effects: true                   # (pack) scanlines and a moving sheen on the card
-  hint:                           # (pack) the "left click to close" line, GUI pixels from the top-left corner
-    x: 6
-    y: 6
-    scale: 1
-  close-on-damage: true
-  sounds: true
-  open-cooldown-ticks: 10         # no reopening for this long after closing
-  freeze-method: auto             # auto | camera | mount. See README "How freezing works".
-
-present:                          # holding the card out (F)
-  cooldown-ticks: 20              # between two starts by the same player
-  update-interval-ticks: 10       # how often viewers in range are refreshed
-  render-distance: 32             # players further away are not told about the pose
-  max-seconds: 0                  # stop by itself after this long; 0 = never
-
-inspect:                          # the card on the HUD of somebody who looks at a presenting player
-  enabled: true
-  range: 5                        # blocks
-  interval-ticks: 4
-  scale: 1                        # (pack)
-  offset-x: 6                     # (pack) GUI pixels between the card and the right edge of the screen
-  offset-y: 0                     # (pack) GUI pixels below the middle row
+present:                          # holding the card out (right mouse button held)
+  cooldown-ticks: 10              # between two starts by the same player
+  render-distance: 32             # how far away the held-out card is drawn
 
 scanner:
   cooldown-ticks: 20              # after a scan has finished
   swipe-ticks: 14                 # the card sliding through the slot
   result-ticks: 40                # how long the green or red light stays
-  present-range: 2.5              # how close a presenting player must stand for the scanner to read the card
+  present-range: 2.5              # how close a player holding the card out must stand for the scanner to read it
   volume: 1.0
 
 computer:
@@ -70,18 +48,13 @@ pack:
   delivery: auto                  # auto | same-port | http | url | none. See README "Hosting the pack".
   required: false                 # true: the vanilla "this server requires a resource pack" prompt (declining then disconnects)
   prompt: ""                      # MiniMessage text for the prompt; empty = vanilla text
-  send-delay-ticks: 60            # after joining; later than other plugins' packs, so this pack ends up on top
+  send-delay-ticks: 20            # after joining
   public-host: ""                 # the address players reach this server at; empty = the one each player typed
   http:                           # delivery http
     bind: 0.0.0.0
     port: 8166
   url: ""                         # delivery url: where you uploaded plugins/IdCards/idcards-pack.zip
   sha1: ""                        # delivery url: its SHA-1; empty = the one of the zip this plugin built
-  text-shader:
-    merge: true                   # add the card HUD to another plugin's text shader instead of replacing it
-    radio-zip: Radio/radio-pack.zip                             # relative to plugins/
-    superbvehicles-zip: SuperbVehicles/pack/SuperbVehicles-hud.zip
-    cctv-zip: CCTV/cctv-pack.zip
 
 nametags:
   hide: false                     # true: name tags above heads are hidden for everyone (team idc_hidden), identity is on the card

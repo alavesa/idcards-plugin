@@ -13,18 +13,12 @@ public final class Keys {
     public final NamespacedKey itemType;
     /** On cards: the owner's UUID, the card's own id, when it was issued, and the server's signature over the three. */
     public final NamespacedKey cardOwner, cardId, cardIssued, cardSignature;
-    /** On the client-only stand-in items shown while presenting; such an item must never exist in an inventory. */
+    /** On the stand-in items IdCards 1.0 showed while presenting; any that is found is deleted. */
     public final NamespacedKey fake;
     /** On block entities: the id of the placed block they belong to. */
     public final NamespacedKey blockId;
-    /** On players: set while the card UI is open, so a crash cannot leave them frozen (cleared on join). */
-    public final NamespacedKey uiOpen;
-    /** On UI helper entities (camera anchor, seat). */
+    /** On the display entities of a held or presented card (never saved; swept if a reload leaves them behind). */
     public final NamespacedKey helper;
-    /** Attribute modifiers of the mount-style freeze. */
-    public final NamespacedKey freezeModifier;
-    /** On players who chose the plain-text card (/idcard plain). */
-    public final NamespacedKey plain;
 
     public Keys(Plugin plugin) {
         itemType = new NamespacedKey(plugin, "item");
@@ -34,10 +28,7 @@ public final class Keys {
         cardSignature = new NamespacedKey(plugin, "signature");
         fake = new NamespacedKey(plugin, "fake");
         blockId = new NamespacedKey(plugin, "block");
-        uiOpen = new NamespacedKey(plugin, "ui_open");
         helper = new NamespacedKey(plugin, "helper");
-        freezeModifier = new NamespacedKey(plugin, "freeze");
-        plain = new NamespacedKey(plugin, "plain");
     }
 
     /** The plugin item type of a stack, or null for everything else. */

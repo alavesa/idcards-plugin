@@ -2,7 +2,11 @@ package fi.alavesa.idcards.card;
 
 import fi.alavesa.idcards.IdCardsPlugin;
 import fi.alavesa.idcards.config.Lang;
+import io.papermc.paper.datacomponent.DataComponentType;
 import io.papermc.paper.datacomponent.DataComponentTypes;
+import io.papermc.paper.datacomponent.item.ItemAttributeModifiers;
+import io.papermc.paper.datacomponent.item.KineticWeapon;
+import io.papermc.paper.datacomponent.item.UseEffects;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -28,11 +32,14 @@ import org.jspecify.annotations.Nullable;
 /**
  * Makes and reads ID cards.
  *
- * <p>A card is a paper item with the pack's card model. What makes it a card, and whose, is its persistent data:
- * owner UUID, the card's own id, the issue time and an HMAC over those three made with a secret that never leaves
- * this server (plugins/IdCards/secret.key). Name and lore are decoration: renaming a card on an anvil changes
- * nothing, and a card whose data was typed in by hand (creative mode can write any item data) has no valid
- * signature and reads as FORGED. The owner's name is never stored on the card; it is looked up from the UUID.
+ * <p>A card is a spear item with the pack's card model. A spear, because vanilla gives spears a hold-out animation
+ * while the right mouse button is held, which is how a card is presented; everything that makes a spear a weapon is
+ * taken off it (no damage, no knockback, no dismounting, no durability, no slowdown). What makes the item a card,
+ * and whose, is its persistent data: owner UUID, the card's own id, the issue time and an HMAC over those three made
+ * with a secret that never leaves this server (plugins/IdCards/secret.key). Name and lore are decoration: renaming a
+ * card on an anvil changes nothing, and a card whose data was typed in by hand (creative mode can write any item
+ * data) has no valid signature and reads as FORGED. The owner's name is never stored on the card; it is looked up
+ * from the UUID.
  *
  * <p>With card.one-per-player the newest card of an owner is the only valid one (cards table); older ones read as
  * REVOKED, so "one card" holds even when an old card is still lying in a chest.
@@ -41,6 +48,7 @@ public final class CardService {
 
     public static final String TYPE = "card";
     public static final Key MODEL = Key.key("idcards", "id_card");
+    public static final Material BASE = Material.WOODEN_SPEAR;
 
     private final IdCardsPlugin plugin;
     private final byte[] secret;
@@ -70,9 +78,7 @@ public final class CardService {
         current.put(owner, cardId);
         plugin.db().write("INSERT INTO cards (owner, card_id, issued_at) VALUES (?,?,?) ON CONFLICT(owner) DO UPDATE SET "
                 + "card_id = excluded.card_id, issued_at = excluded.issued_at", owner.toString(), cardId.toString(), now);
-        ItemStack item = ItemStack.of(Material.PAPER);
-        item.setData(DataComponentTypes.ITEM_MODEL, MODEL);
-        item.setData(DataComponentTypes.MAX_STACK_SIZE, 1);
+        ItemStack item = base();
         Lang lang = plugin.lang();
         String name = plugin.profiles().name(owner);
         item.setData(DataComponentTypes.ITEM_NAME, lang.get("item.card.name"));
@@ -85,6 +91,53 @@ public final class CardService {
             pdc.set(plugin.keys().cardId, PersistentDataType.STRING, cardId.toString());
             pdc.set(plugin.keys().cardIssued, PersistentDataType.LONG, now);
             pdc.set(plugin.keys().cardSignature, PersistentDataType.STRING, sign(owner, cardId, now));
+        });
+        return item;
+    }
+
+    /** The bare item every card is built on. */
+    private static ItemStack base() {
+        ItemStack item = ItemStack.of(BASE);
+        item.setData(DataComponentTypes.ITEM_MODEL, MODEL);
+        item.setData(DataComponentTypes.MAX_STACK_SIZE, 1);
+        // a spear only for its animation: holding the button does nothing to anybody
+        item.setData(DataComponentTypes.KINETIC_WEAPON, KineticWeapon.kineticWeapon().delayTicks(0).build());
+        item.setData(DataComponentTypes.USE_EFFECTS, UseEffects.useEffects().canSprint(true).speedMultiplier(1f).build());
+        item.setData(DataComponentTypes.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.itemAttributes().build());
+        for (DataComponentType type : new DataComponentType[]{DataComponentTypes.PIERCING_WEAPON, DataComponentTypes.WEAPON, DataComponentTypes.MAX_DAMAGE,
+                DataComponentTypes.DAMAGE, DataComponentTypes.MINIMUM_ATTACK_CHARGE, DataComponentTypes.ENCHANTABLE}) {
+            item.unsetData(type);
+        }
+        return item;
+    }
+
+    /**
+     * Reads the main-hand item of a player; null when it is not a card. Cards made by IdCards 1.0 (paper) are turned
+     * into the current kind on the way: same data, same name and lore, new base item.
+     */
+    public @Nullable CardData readHeld(Player p, ItemStack hand) {
+        if (hand.getType() != BASE && hand.getType() != Material.PAPER) return null;
+        if (!isCard(hand)) return null;
+        if (hand.getType() != BASE) {
+            hand = upgrade(hand);
+            p.getInventory().setItemInMainHand(hand);
+        }
+        return read(hand);
+    }
+
+    /** A 1.0 paper card as a current card. */
+    public ItemStack upgrade(ItemStack old) {
+        ItemStack item = base();
+        item.setData(DataComponentTypes.ITEM_NAME, plugin.lang().get("item.card.name"));
+        if (old.lore() != null) item.lore(old.lore());
+        var from = old.getPersistentDataContainer();
+        item.editPersistentDataContainer(pdc -> {
+            for (var key : new org.bukkit.NamespacedKey[]{plugin.keys().itemType, plugin.keys().cardOwner, plugin.keys().cardId, plugin.keys().cardSignature}) {
+                String v = from.get(key, PersistentDataType.STRING);
+                if (v != null) pdc.set(key, PersistentDataType.STRING, v);
+            }
+            Long issued = from.get(plugin.keys().cardIssued, PersistentDataType.LONG);
+            if (issued != null) pdc.set(plugin.keys().cardIssued, PersistentDataType.LONG, issued);
         });
         return item;
     }

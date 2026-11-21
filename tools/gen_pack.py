@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
-"""Generates the art, fonts, models, item definitions, sounds and layout tables of the IdCards resource pack.
+"""Generates the art, font, models, item definitions, sounds and layout table of the IdCards resource pack.
 
     python3 tools/gen_pack.py              # everything (sounds need ffmpeg on PATH)
     python3 tools/gen_pack.py --no-sounds
 
 Pure standard library: PNGs are written by hand, sounds are synthesised as WAV and encoded with ffmpeg.
 Everything written here is placeholder art that can be replaced file by file (same name, same size).
-Hand-written and NOT touched: pack.mcmeta, shaders/core/text.*, shaders/include/idcards_text_*.glsl,
-shaders/include/idcards_config.glsl.
+Hand-written and NOT touched: pack.mcmeta.
 
-THE CARD HUD (fi.alavesa.idcards.ui, shaders/include/idcards_text_*.glsl). The card is the NAME of a boss bar,
-written in the font idcards:ui and moved by the text shader:
-- the font is monospace by construction (every cell has an alpha-1 pixel in its last column where the glyph leaves
-  it empty, so every character advances CELL_W + 1 px) and has signed spaces of +-2^n px;
-- every card text ends with the pen back at 0, so its width is 0 and vanilla's centring puts pen 0 at the screen
-  centre; a glyph's distance from the centre is its x on the card;
-- the text colour is a marker (red 252, green 0xB8-0xBF) that carries slot, palette colour and mode; the slot gives
-  the row and the scale (SLOTS below).
-The geometry is written to shaders/include/idcards_layout.glsl (shader) and src/main/resources/layout.properties
-(plugin), so the three always agree.
+THE CARD. A held or presented card is a group of display entities (fi.alavesa.idcards.presenting.CardProp): a slab
+model with the bare card on it and text displays for the details, written in the font idcards:ui. The font is
+monospace by construction (every cell has an alpha-1 pixel in its last column where the glyph leaves it empty, so
+every character advances CELL_W + 1 px). SLOTS says where each detail sits on the card; the plugin reads the same
+numbers from src/main/resources/layout.properties. The pack overrides no vanilla file and ships no shader.
 """
 import json, math, os, random, struct, subprocess, sys, wave, zlib
 
@@ -45,7 +39,6 @@ SLOTS = {
     'serial':       (9, 12, 104, 1, CELL_H, 0, 14),
     'barcode':      (10, 105, 100, 3, CELL_H, 0, 9),
     'footer':       (11, 12, 128, 1, CELL_H, 0, 33),
-    'hint':         (12, 0, 0, 1, CELL_H, 1, 40),
 }
 PREFIX_STRIP = (68, 77, 216, 90)     # dark strip under the prefix, x0 y0 x1 y1 (inclusive)
 BAR_W = 3                            # a barcode glyph: 3 columns of bars, advance 4
@@ -490,14 +483,20 @@ def computer_model():
 
 
 def card_models():
-    """card_3d: a 12 x 7.5 px slab, front on its north side, with example contents (the prop in the scanner slot).
-    card_blank: the same slab with the bare card on both faces; presenting writes the real details on it."""
+    """card_3d: a 12 x 7.5 px slab, front on its north side, with example contents (the prop in the scanner slot and
+    the card in a player's hand as others see it). card_blank: the same slab with the bare card (captions only) on
+    the front and the back design on the back; the plugin writes the real details over it with text displays."""
     edge = (0, 0, 0.5, 0.5)
     el = box((2, 4.25, 7.875), (14, 11.75, 8.125), edge, {'north': (0, 0, 16, 8), 'south': (0, 8, 16, 16)})
-    write_json(os.path.join(NS, 'models', 'item', 'card_3d.json'),
-               {'textures': {'0': 'idcards:item/card_face', 'particle': 'idcards:item/card_face'}, 'elements': [el]})
-    face = (0, 0, CARD_W / 16.0, CARD_H / 16.0)                # the art sits in the top-left of a 256x256 texture
-    el = box((2, 4.25, 7.875), (14, 11.75, 8.125), (15, 15, 15.5, 15.5), {'north': face, 'south': face})
+    base = {'textures': {'0': 'idcards:item/card_face', 'particle': 'idcards:item/card_face'}, 'elements': [el]}
+    write_json(os.path.join(NS, 'models', 'item', 'card_3d.json'), base)
+    # in the hand, third person: small, upright, front away from the holder
+    hand = {'rotation': [0, 0, 0], 'translation': [0, 3, 1], 'scale': [0.55, 0.55, 0.55]}
+    write_json(os.path.join(NS, 'models', 'item', 'card_hand.json'), {
+        'parent': 'idcards:item/card_3d', 'display': {'thirdperson_righthand': hand, 'thirdperson_lefthand': hand,
+                                                      'head': {'rotation': [0, 0, 0], 'translation': [0, 0, 0], 'scale': [1, 1, 1]}}})
+    u, v = CARD_W / 16.0, CARD_H / 32.0                        # the art sits in the left of a 256x512 texture: front on top, back below
+    el = box((2, 4.25, 7.875), (14, 11.75, 8.125), (15, 15.5, 15.5, 15.75), {'north': (0, 0, u, v), 'south': (0, 8, u, 8 + v)})
     write_json(os.path.join(NS, 'models', 'item', 'card_blank.json'),
                {'textures': {'0': 'idcards:item/card_blank', 'particle': 'idcards:item/card_blank'}, 'elements': [el]})
 
@@ -533,10 +532,6 @@ def art():
         {'type': 'bitmap', 'file': 'idcards:font/card.png', 'height': CARD_H, 'ascent': 7, 'chars': [chr(CHAR_CARD)]},
     ]})
 
-    # the HUD rides on a BLUE boss bar whose bar graphic is blanked (the same sprites the Radio plugin blanks)
-    for name in ('blue_background', 'blue_progress'):
-        Canvas(182, 5).save(os.path.join(ROOT, 'assets', 'minecraft', 'textures', 'gui', 'sprites', 'boss_bar', name + '.png'))
-
     # items
     card_icon().save(os.path.join(NS, 'textures', 'item', 'id_card.png'))
     icon(TOOL_ICON, TOOL_PAL).save(os.path.join(NS, 'textures', 'item', 'link_tool.png'))
@@ -546,14 +541,24 @@ def art():
     face.save(os.path.join(NS, 'textures', 'item', 'card_face.png'))
     for name in ('id_card', 'link_tool'):
         write_json(os.path.join(NS, 'models', 'item', name + '.json'), {'parent': 'minecraft:item/generated', 'textures': {'layer0': 'idcards:item/' + name}})
-        item_def(name, 'item/' + name)
-    blank = Canvas(256, 256, EDGE)
+    item_def('link_tool', 'item/link_tool')
+    # The card item: the flat icon in menus and on the ground, a small card in the hand for other players, and nothing
+    # at all in the holder's own first-person hand, where the plugin shows the card with its details instead.
+    M = lambda m: {'type': 'minecraft:model', 'model': 'idcards:' + m}
+    write_json(os.path.join(NS, 'items', 'id_card.json'), {'model': {
+        'type': 'minecraft:select', 'property': 'minecraft:display_context',
+        'cases': [{'when': ['firstperson_righthand', 'firstperson_lefthand'], 'model': {'type': 'minecraft:empty'}},
+                  # held out: the hologram is the card, so the hand shows nothing
+                  {'when': ['thirdperson_righthand', 'thirdperson_lefthand', 'head'], 'model': {
+                      'type': 'minecraft:condition', 'property': 'minecraft:using_item',
+                      'on_true': {'type': 'minecraft:empty'}, 'on_false': M('item/card_hand')}}],
+        'fallback': M('item/id_card')}})
+    blank = Canvas(256, 512, EDGE)
     blank.blit(card_art(labels=True), 0, 0)
+    blank.blit(card_back(), 0, 256)
     blank.save(os.path.join(NS, 'textures', 'item', 'card_blank.png'))
     card_models()
     item_def('card_blank', 'item/card_blank')
-    # what a presenting player's hand is said to hold: nothing visible (the card is a group of display entities)
-    write_json(os.path.join(NS, 'items', 'empty.json'), {'model': {'type': 'minecraft:empty'}})
     item_def('card_prop', 'item/card_3d')
 
     # blocks
@@ -573,30 +578,11 @@ def art():
 
 def layout():
     order = sorted(SLOTS.items(), key=lambda kv: kv[1][0])
-    os.makedirs(os.path.join(NS, 'shaders', 'include'), exist_ok=True)
-    with open(os.path.join(NS, 'shaders', 'include', 'idcards_layout.glsl'), 'w') as f:
-        f.write('// Generated by tools/gen_pack.py: the card geometry in card pixels (the plugin reads the same numbers from\n'
-                '// layout.properties). One row per slot: top y, scale, glyph height, anchor (0 = on the card, 1 = screen corner).\n'
-                f'const vec2 IDC_CARD = vec2({CARD_W}.0, {CARD_H}.0);\n'
-                f'const int IDC_SLOTS = {len(order)};\n'
-                f'const vec4 IDC_SLOT[{len(order)}] = vec4[{len(order)}](\n'
-                + ',\n'.join(f'    vec4({v[2]}.0, {v[3]}.0, {v[4]}.0, {v[5]}.0)   // {v[0]} {k}' for k, v in order)
-                + '\n);\n'
-                f'const int IDC_SLOT_ART = 0;\nconst int IDC_SLOT_PHOTO = 1;\n'
-                f'const vec3 IDC_PALETTE[{len(PALETTE)}] = vec3[{len(PALETTE)}](\n'
-                + ',\n'.join('    vec3(%.4f, %.4f, %.4f)' % tuple(v / 255 for v in rgb(p)) for p in PALETTE) + '\n);\n')
-    # GLSL does not allow a comment between an array element and its comma: move the commas in front of the comments
-    p = os.path.join(NS, 'shaders', 'include', 'idcards_layout.glsl')
-    s = open(p).read()
-    import re
-    s = re.sub(r'\)(   // [0-9]+ [a-z_]+),\n', r'),\1\n', s)
-    open(p, 'w').write(s)
-
     lines = ['# Generated by tools/gen_pack.py. Geometry shared by the resource pack and the plugin; do not edit by hand.',
              f'card.width={CARD_W}', f'card.height={CARD_H}', f'font.advance={CELL_W + 1}', f'bars.advance={BAR_W + 1}',
              f'photo={PHOTO[0]},{PHOTO[1]},{PHOTO[2]}',
              'palette=' + ','.join('%06X' % p for p in PALETTE),
-             f'palette.ink={INK}', f'palette.label={LABEL}', f'palette.paper={PAPER_TEXT}', f'palette.accent={ACCENT}', f'palette.hint={HINT}',
+             f'palette.ink={INK}', f'palette.label={LABEL}', f'palette.paper={PAPER_TEXT}', f'palette.accent={ACCENT}',
              f'sheet.columns={SHEET_COLS}',
              f'cell={CELL_W},{CELL_H}']
     for k, v in order:

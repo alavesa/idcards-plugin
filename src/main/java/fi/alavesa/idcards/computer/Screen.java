@@ -5,7 +5,6 @@ import fi.alavesa.idcards.block.BlockManager;
 import fi.alavesa.idcards.block.PlacedBlock;
 import fi.alavesa.idcards.luckperms.PrefixFormatter;
 import fi.alavesa.idcards.scanner.ScanRecord;
-import fi.alavesa.idcards.ui.CardCanvas;
 import fi.alavesa.idcards.ui.CardView;
 import fi.alavesa.idcards.ui.Layout;
 import java.time.Instant;
@@ -30,7 +29,7 @@ import org.jspecify.annotations.Nullable;
  * The picture on one computer's screen: a handful of text_display entities placed on the glass of the model.
  * Rendering only; what to show is decided by {@link ComputerService}.
  *
- * <p>All text is drawn by the same {@code core/text} shader as the card HUD, in the card font, at full brightness
+ * <p>All text is drawn in the card font, at full brightness
  * (the displays carry a brightness override of 15/15, so the screen reads the same in a dark room), without shadow
  * or background. The face is the player-head text object of the card owner, scaled up.
  *
@@ -106,7 +105,7 @@ final class Screen {
     }
 
     private Component font(String sanitized, TextColor color) {
-        return Component.text(sanitized, color).font(CardCanvas.FONT).shadowColor(ShadowColor.none());
+        return Component.text(sanitized, color).font(Layout.FONT).shadowColor(ShadowColor.none());
     }
 
     private void line(TextDisplay d, String raw, TextColor color, float scale, double fromLeft, double fromTop, int maxChars) {

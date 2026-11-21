@@ -10,15 +10,13 @@ import fi.alavesa.idcards.config.Lang;
 import fi.alavesa.idcards.config.Settings;
 import fi.alavesa.idcards.link.LinkService;
 import fi.alavesa.idcards.luckperms.PrefixService;
-import fi.alavesa.idcards.nms.CameraBridge;
+import fi.alavesa.idcards.nms.RideBridge;
 import fi.alavesa.idcards.presenting.PresentService;
 import fi.alavesa.idcards.profile.ProfileService;
 import fi.alavesa.idcards.resourcepack.PackService;
 import fi.alavesa.idcards.scanner.ScanService;
 import fi.alavesa.idcards.scanner.ScannerType;
 import fi.alavesa.idcards.storage.Database;
-import fi.alavesa.idcards.ui.CardRenderer;
-import fi.alavesa.idcards.ui.CardUiService;
 import fi.alavesa.idcards.ui.CardViews;
 import fi.alavesa.idcards.ui.Layout;
 import fi.alavesa.idcards.util.Keys;
@@ -35,8 +33,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scoreboard.Team;
 
 /**
- * ID cards for RP servers: a card bound to a player, a full-screen card view, presenting, card scanners and scanner
- * computers. This class only wires the parts together; see the package of each part.
+ * ID cards for RP servers: a card bound to a player that shows its owner's details when held and held out, card
+ * scanners and scanner computers. This class only wires the parts together; see the package of each part.
  */
 public final class IdCardsPlugin extends JavaPlugin implements Listener {
 
@@ -52,12 +50,11 @@ public final class IdCardsPlugin extends JavaPlugin implements Listener {
     private PrefixService prefixes;
     private CardService cards;
     private CardViews views;
-    private CardRenderer renderer;
     private BlockManager blocks;
     private LinkService links;
     private ComputerService computers;
     private ScanService scans;
-    private CardUiService ui;
+    private RideBridge rides;
     private PresentService presenting;
     private PackService pack;
 
@@ -80,19 +77,18 @@ public final class IdCardsPlugin extends JavaPlugin implements Listener {
             return;
         }
         views = new CardViews(this);
-        renderer = new CardRenderer(layout, lang);
+        rides = new RideBridge(getLogger());
         blocks = new BlockManager(this);
         blocks.register(new ScannerType(this));
         blocks.register(new ComputerType(this));
         links = new LinkService(this);
         computers = new ComputerService(this);
         scans = new ScanService(this);
-        ui = new CardUiService(this, new CameraBridge(getLogger()));
         presenting = new PresentService(this);
         pack = new PackService(this, getFile());
 
         var pm = Bukkit.getPluginManager();
-        for (Listener l : new Listener[]{this, profiles, new ItemGuard(this), blocks, links, computers, ui, presenting, pack}) pm.registerEvents(l, this);
+        for (Listener l : new Listener[]{this, profiles, new ItemGuard(this), blocks, links, computers, presenting, pack}) pm.registerEvents(l, this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
                 event.registrar().register(new IdCardCommand(this).build(), "IdCards: cards, scanners, computers"));
 
@@ -100,7 +96,7 @@ public final class IdCardsPlugin extends JavaPlugin implements Listener {
         profiles.onUpdate(this::refresh);
         prefixes.onChange(this::refresh);
 
-        ui.sweepHelpers();
+        presenting.sweep();
         blocks.load();
         links.load();
         computers.refreshAll();
@@ -112,7 +108,6 @@ public final class IdCardsPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        if (ui != null) ui.closeAll(CardUiService.CloseReason.PLUGIN);
         if (presenting != null) presenting.stopAll();
         if (blocks != null) blocks.shutdown();
         if (pack != null) pack.stop();
@@ -120,21 +115,19 @@ public final class IdCardsPlugin extends JavaPlugin implements Listener {
         if (db != null) db.close();
     }
 
-    /** /idcard reload. Open card views, presenting players and placed blocks carry on with the new settings. */
+    /** /idcard reload. Held cards and placed blocks carry on with the new settings. */
     public void reload() {
         reloadConfig();
         settings = new Settings(getConfig());
         lang = new Lang(this, settings.language);
-        renderer = new CardRenderer(layout, lang);
         prefixes.configure(settings.fallbackPrefix, settings.prefixRefreshSeconds);
         pack.reload();
-        ui.refreshAll();
+        presenting.stopAll(); // held cards are made again on the next tick, with the new texts
         computers.refreshAll();
         applyNametags();
     }
 
     private void refresh(UUID player) {
-        ui.refresh(player);
         presenting.refresh(player);
     }
 
@@ -164,12 +157,11 @@ public final class IdCardsPlugin extends JavaPlugin implements Listener {
     public PrefixService prefixes() { return prefixes; }
     public CardService cards() { return cards; }
     public CardViews views() { return views; }
-    public CardRenderer renderer() { return renderer; }
     public BlockManager blocks() { return blocks; }
     public LinkService links() { return links; }
     public ComputerService computers() { return computers; }
     public ScanService scans() { return scans; }
-    public CardUiService ui() { return ui; }
+    public RideBridge rides() { return rides; }
     public PresentService presenting() { return presenting; }
     public PackService pack() { return pack; }
 }

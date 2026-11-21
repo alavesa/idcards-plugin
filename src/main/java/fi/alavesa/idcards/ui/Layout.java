@@ -9,8 +9,8 @@ import java.util.Properties;
 import org.bukkit.plugin.Plugin;
 
 /**
- * The geometry the resource pack was generated with (layout.properties, written by tools/gen_pack.py next to the
- * shader's copy of the same numbers), plus the measurements of the card font.
+ * The geometry the resource pack was generated with (layout.properties, written by tools/gen_pack.py), plus the
+ * measurements of the card font.
  */
 public final class Layout {
 
@@ -21,14 +21,16 @@ public final class Layout {
     public record Box(double x0, double y0, double z0, double x1, double y1, double z1) {
     }
 
+    /** The card font of the resource pack. */
+    public static final net.kyori.adventure.key.Key FONT = net.kyori.adventure.key.Key.key("idcards", "ui");
     /** What the card font can show besides ASCII 0x20-0x5F. */
     private static final String EXTRA = "ÄÖÅÜÉ";
 
     private final Properties p = new Properties();
     public final int cardWidth, cardHeight, advance, barsAdvance;
     public final int[] palette;
-    public final int ink, label, paper, accent, hint;
-    public final Slot art, photo, header, labelName, nameBig, nameSmall, labelTitle, prefix, labelSerial, serial, barcode, footer, hintSlot;
+    public final int ink, label, paper, accent;
+    public final Slot art, photo, header, labelName, nameBig, nameSmall, labelTitle, prefix, labelSerial, serial, barcode, footer;
 
     public Layout(Plugin plugin) throws IOException {
         try (InputStream in = plugin.getResource("layout.properties")) {
@@ -46,7 +48,6 @@ public final class Layout {
         label = integer("palette.label");
         paper = integer("palette.paper");
         accent = integer("palette.accent");
-        hint = integer("palette.hint");
         art = slot("art");
         photo = slot("photo");
         header = slot("header");
@@ -59,7 +60,6 @@ public final class Layout {
         serial = slot("serial");
         barcode = slot("barcode");
         footer = slot("footer");
-        hintSlot = slot("hint");
     }
 
     private int integer(String key) {

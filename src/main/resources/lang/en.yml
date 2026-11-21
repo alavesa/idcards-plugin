@@ -1,7 +1,7 @@
-# IdCards texts, MiniMessage. card.* lines marked (card) are printed ON the card in the card font:
-# capitals, digits and punctuation only, no tags, and they are cut at the width of their field.
+# IdCards texts, MiniMessage. Lines marked (card font) are drawn in the card font: capitals, digits and punctuation
+# only, no tags.
 
-version: 2                        # raised by the plugin when texts change; an older file on disk is kept as en.yml.old
+version: 3                        # raised by the plugin when texts change; an older file on disk is kept as en.yml.old
 
 prefix: "<dark_gray>[<red>ID<dark_gray>]</dark_gray> <gray>"
 
@@ -9,7 +9,7 @@ item:
   card:
     name: "<white>ID Card"
     lore-owner: "<gray>Issued to <white><player>"
-    lore-use: "<dark_gray>Right-click: view · F: present"
+    lore-use: "<dark_gray>Hold it to read it · hold right-click to show it"
   scanner:
     name: "<white>Card Scanner"
     lore: "<gray>Place on a wall or on the floor"
@@ -21,21 +21,8 @@ item:
     lore: "<gray>Scanner, then computer. Sneak-click: unlink"
 
 card:
-  header: "SECURE FACILITY - PERSONNEL ID"      # (card) 34 characters
-  label-name: "NAME"                            # (card)
-  label-title: "TITLE"                          # (card)
-  label-serial: "SERIAL"                        # (card)
-  footer: "PROPERTY OF SITE ADMINISTRATION"     # (card) 33 characters
-  hint-close: "LEFT CLICK OR SHIFT TO CLOSE"    # (card) top-left corner of the screen
-  unknown-name: "UNKNOWN"                       # (card) when nobody by the card's UUID is known
-  no-permission: "You may not use ID cards."
-  unreadable: "<red>This card cannot be read."
-  plain: "<white><name></white> <dark_gray>|</dark_gray> <prefix> <dark_gray>|</dark_gray> <gray><serial></gray> <dark_gray>- left click or shift to close"   # /idcard plain
-  plain-inspect: "<gray>ID:</gray> <white><name></white> <dark_gray>|</dark_gray> <prefix> <dark_gray>|</dark_gray> <gray><serial>"
+  unknown-name: "UNKNOWN"         # printed on the card when nobody by the card's UUID is known (capitals and digits only)
   received: "You received an ID card."
-
-present:
-  no-permission: "You may not present ID cards."
 
 block:
   no-permission-place: "<red>You may not place this."
@@ -85,6 +72,4 @@ command:
   given-item: "Gave <white><player></white> a <item><gray>."
   self-disabled: "<red>Cards are issued by staff here."
   self-has-card: "You already carry your ID card."
-  plain-on: "ID cards are now shown as plain text. <dark_gray>/idcard plain switches back."
-  plain-off: "ID cards are now drawn with the resource pack."
   self-cooldown: "You can get a new card in <white><seconds></white> s."

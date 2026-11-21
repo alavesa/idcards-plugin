@@ -112,6 +112,7 @@ public final class ScannerType extends BlockType {
         }
         ItemStack card = plugin.cards().held(player);
         if (card == null) return; // no message: an empty hand on a scanner is not worth a chat line
+        player.clearActiveItem(); // the click must not also start holding the card out
         plugin.scans().scan(player, block, card);
     }
 

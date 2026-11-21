@@ -1,6 +1,7 @@
 package fi.alavesa.idcards.card;
 
 import fi.alavesa.idcards.IdCardsPlugin;
+import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
 import java.util.EnumSet;
 import java.util.Set;
 import org.bukkit.Bukkit;
@@ -9,6 +10,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -27,13 +29,13 @@ import org.bukkit.inventory.PlayerInventory;
  * Keeps plugin items out of places where vanilla would consume, copy or transform them.
  *
  * <ul>
- *   <li>No plugin item (card, scanner, computer, link tool; all are paper underneath) can be put into a crafting
+ *   <li>No plugin item (card, scanner, computer, link tool) can be put into a crafting
  *       grid, furnace, anvil, grindstone, loom, cartography table, brewing stand, villager trade or any other
  *       workstation, by clicking, dragging, shift-clicking, number keys or hoppers. Storage containers are fine,
  *       for cards only when card.allow-containers is on.</li>
  *   <li>Cards follow card.allow-drop and card.on-death.</li>
- *   <li>The stand-in items a client is shown while presenting never become real: a creative client that tries to
- *       write one into an inventory is refused, and any that is found is deleted.</li>
+ *   <li>A card is a spear underneath and must not hurt: hits and damage by a player holding one are cancelled.</li>
+ *   <li>Leftovers of IdCards 1.0 are tidied on join: paper cards become current cards, stand-in items are deleted.</li>
  * </ul>
  */
 public final class ItemGuard implements Listener {
@@ -162,11 +164,25 @@ public final class ItemGuard implements Listener {
         }
     }
 
+    /** A left click on somebody with a card in the hand is not an attack. Our own blocks handle their clicks themselves. */
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onAttack(PrePlayerAttackEntityEvent e) {
+        if (plugin.cards().isCard(e.getPlayer().getInventory().getItemInMainHand()) && plugin.blocks().of(e.getAttacked()) == null) e.setCancelled(true);
+    }
+
+    /** Belt and braces for anything the spear could still do (a held-out spear touches what it is pushed into). */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onDamage(EntityDamageByEntityEvent e) {
+        if (e.getDamager() instanceof Player p && plugin.cards().isCard(p.getInventory().getItemInMainHand())) e.setCancelled(true);
+    }
+
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
         PlayerInventory inv = e.getPlayer().getInventory();
         for (int i = 0; i < inv.getSize(); i++) {
-            if (plugin.keys().isFake(inv.getItem(i))) inv.setItem(i, null);
+            ItemStack item = inv.getItem(i);
+            if (plugin.keys().isFake(item)) inv.setItem(i, null);
+            else if (item != null && item.getType() != CardService.BASE && plugin.cards().isCard(item)) inv.setItem(i, plugin.cards().upgrade(item));
         }
         if (plugin.settings().cardGiveOnJoin && e.getPlayer().hasPermission("idcard.use") && !plugin.cards().hasOwnCard(e.getPlayer())) {
             plugin.cards().give(e.getPlayer(), e.getPlayer().getUniqueId());

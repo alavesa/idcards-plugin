@@ -2,7 +2,7 @@ name: IdCards
 version: '${version}'
 main: fi.alavesa.idcards.IdCardsPlugin
 api-version: '26.3'
-description: ID cards with a full-screen card view, presenting, card scanners and scanner computers
+description: ID cards that show their owner's details when held and held out, card scanners and scanner computers
 authors: [Piia Alavesa]
 
 # /idcard is registered with Brigadier (LifecycleEvents.COMMANDS) in command/IdCardCommand, not here.
@@ -24,8 +24,6 @@ permissions:
       idcard.present: true
       idcard.self: true
       idcard.give: true
-      idcard.close: true
-      idcard.close.others: true
       idcard.reload: true
       idcard.scanner.give: true
       idcard.scanner.place: true
@@ -37,20 +35,14 @@ permissions:
       idcard.linktool.give: true
       idcard.link: true
   idcard.use:
-    description: Open a card's full-screen view (right-click) and scan cards at scanners
+    description: See a held card's details and scan cards at scanners
     default: true
   idcard.present:
-    description: Hold a card out with F
+    description: Hold a card out for others (right mouse button)
     default: true
   idcard.self:
     description: /idcard get (also needs card.self-service.enabled)
     default: true
-  idcard.close:
-    description: /idcard close for yourself
-    default: true
-  idcard.close.others:
-    description: /idcard close <player>
-    default: op
   idcard.give:
     description: /idcard give
     default: op

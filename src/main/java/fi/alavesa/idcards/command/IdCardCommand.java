@@ -12,7 +12,6 @@ import fi.alavesa.idcards.block.BlockType;
 import fi.alavesa.idcards.block.Mount;
 import fi.alavesa.idcards.block.PlacedBlock;
 import fi.alavesa.idcards.config.Lang;
-import fi.alavesa.idcards.ui.CardUiService;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
@@ -50,14 +49,6 @@ public final class IdCardCommand {
                                 // a card of somebody else, e.g. a replacement handed over by security
                                 .then(Commands.argument("owner", StringArgumentType.word()).executes(ctx -> giveCard(ctx, target(ctx), StringArgumentType.getString(ctx, "owner"))))))
                 .then(Commands.literal("get").requires(perm("idcard.self")).executes(this::selfService))
-                .then(Commands.literal("close").requires(perm("idcard.close"))
-                        .executes(ctx -> close(ctx, self(ctx)))
-                        .then(Commands.argument("player", ArgumentTypes.player()).requires(perm("idcard.close.others")).executes(ctx -> close(ctx, target(ctx)))))
-                .then(Commands.literal("plain").requires(perm("idcard.use")).executes(ctx -> {
-                    Player p = self(ctx);
-                    if (p != null) plugin.lang().send(p, plugin.ui().togglePlain(p) ? "command.plain-on" : "command.plain-off");
-                    return Command.SINGLE_SUCCESS;
-                }))
                 .then(Commands.literal("reload").requires(perm("idcard.reload")).executes(ctx -> {
                     plugin.reload();
                     plugin.lang().send(ctx.getSource().getSender(), "command.reloaded");
@@ -157,16 +148,6 @@ public final class IdCardCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    private int close(CommandContext<CommandSourceStack> ctx, @Nullable Player p) {
-        if (p == null) {
-            plugin.lang().send(ctx.getSource().getSender(), "command.player-needed");
-            return 0;
-        }
-        plugin.ui().close(p, CardUiService.CloseReason.COMMAND);
-        plugin.presenting().stop(p);
-        return Command.SINGLE_SUCCESS;
-    }
-
     // ------------------------------------------------------------------ /idcard test: everything a click does, as a command
 
     /**
@@ -175,14 +156,6 @@ public final class IdCardCommand {
      */
     private LiteralArgumentBuilder<CommandSourceStack> test() {
         return Commands.literal("test").requires(perm("idcard.admin"))
-                .then(Commands.literal("open").then(Commands.argument("player", ArgumentTypes.player())
-                        .executes(ctx -> testOpen(ctx, null))
-                        .then(Commands.argument("owner", StringArgumentType.word()).executes(ctx -> testOpen(ctx, StringArgumentType.getString(ctx, "owner"))))))
-                .then(Commands.literal("present").then(Commands.argument("player", ArgumentTypes.player()).executes(ctx -> {
-                    Player p = target(ctx);
-                    if (p != null && !plugin.presenting().start(p)) plugin.presenting().stop(p);
-                    return Command.SINGLE_SUCCESS;
-                })))
                 .then(Commands.literal("place").then(Commands.argument("type", StringArgumentType.word())
                         .then(Commands.argument("pos", ArgumentTypes.blockPosition())
                                 .then(Commands.argument("facing", StringArgumentType.word())
@@ -226,16 +199,11 @@ public final class IdCardCommand {
                                     ctx.getSource().getSender().sendMessage("right-click fired");
                                     return Command.SINGLE_SUCCESS;
                                 })))))
-                .then(Commands.literal("leftclick").then(Commands.argument("player", ArgumentTypes.player()).executes(ctx -> {
+                // as if the right mouse button were held with the card, until the command is given again
+                .then(Commands.literal("hold").then(Commands.argument("player", ArgumentTypes.player()).executes(ctx -> {
                     Player p = target(ctx);
-                    if (p != null) Bukkit.getPluginManager().callEvent(new io.papermc.paper.event.player.PlayerArmSwingEvent(p, org.bukkit.inventory.EquipmentSlot.HAND));
-                    return Command.SINGLE_SUCCESS;
-                })))
-                .then(Commands.literal("f").then(Commands.argument("player", ArgumentTypes.player()).executes(ctx -> {
-                    Player p = target(ctx);
-                    if (p != null) {
-                        Bukkit.getPluginManager().callEvent(new org.bukkit.event.player.PlayerSwapHandItemsEvent(p, p.getInventory().getItemInOffHand(), p.getInventory().getItemInMainHand()));
-                    }
+                    if (p == null) return 0;
+                    ctx.getSource().getSender().sendMessage("held out: " + plugin.presenting().toggleForced(p));
                     return Command.SINGLE_SUCCESS;
                 })))
                 .then(Commands.literal("list").executes(ctx -> {
@@ -245,22 +213,6 @@ public final class IdCardCommand {
                     }
                     return Command.SINGLE_SUCCESS;
                 }));
-    }
-
-    @SuppressWarnings("deprecation")
-    private int testOpen(CommandContext<CommandSourceStack> ctx, @Nullable String ownerName) throws CommandSyntaxException {
-        Player p = target(ctx);
-        if (p == null) return 0;
-        UUID owner = p.getUniqueId();
-        if (ownerName != null) {
-            try {
-                owner = UUID.fromString(ownerName);
-            } catch (IllegalArgumentException e) {
-                owner = Bukkit.getOfflinePlayer(ownerName).getUniqueId();
-            }
-        }
-        if (!plugin.ui().open(p, owner)) ctx.getSource().getSender().sendMessage("not opened (already open or cooling down)");
-        return Command.SINGLE_SUCCESS;
     }
 
     private int testPlace(CommandContext<CommandSourceStack> ctx, String mountName) throws CommandSyntaxException {
